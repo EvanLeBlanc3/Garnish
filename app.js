@@ -1,4 +1,4 @@
-/* Garnish — the home bar app (v2) */
+/* Garnish — the home bar app (v6) */
 (() => {
 'use strict';
 
@@ -21,7 +21,6 @@ const BOOZE_SHELVES = new Set(["Spirits","Liqueurs & Amari","Wine, Vermouth & Be
 const ALWAYS = new Set(["Hot Water","Cold Water"]);
 const BASICS = ["Lemon Juice","Lime Juice","Simple Syrup","Sugar","Club Soda","Angostura Bitters","Lemon","Lime","Black Pepper"];
 
-// Plain "Whiskey" logic: it can stand in for these, and any of these can satisfy a recipe asking for plain "Whiskey"
 const WHISKEY_STANDIN = ["Bourbon","Rye Whiskey","Irish Whiskey","Blended Whiskey","Japanese Whisky"];
 const ANY_WHISKEY = [...WHISKEY_STANDIN, "Scotch Whisky", "Islay Scotch"];
 function covers(name, have) {
@@ -33,7 +32,6 @@ function covers(name, have) {
 
 const CATS = ["All","Classic","Martini","Sour","Highball","Bubbly","Tiki","Frozen","Dessert","Hot","Shot","Punch","Geeky","Mocktail"];
 const BASES = ["Any spirit","Gin","Vodka","Rum","Tequila","Whiskey","Brandy","Wine","Beer","Liqueur","Zero-proof"];
-// lower-case for sentences; display version is capitalised
 const GLASS_WORD = {martini:"martini glass",coupe:"coupe glass",rocks:"rocks glass",highball:"highball glass",collins:"Collins glass",
  margarita:"margarita glass",mule:"copper mug",shot:"shot glass",hurricane:"hurricane glass",wine:"wine glass",julep:"julep cup",
  flute:"Champagne flute",tiki:"tiki mug",irish:"Irish coffee glass",hot:"mug",pitcher:"pitcher",potion:"potion bottle",pint:"pint glass"};
@@ -47,6 +45,7 @@ const METHOD_NAME = {shake:"Shaken & strained",shakeR:"Shaken, on the rocks",dry
 const KEY = "garnish.v1";
 const S = Object.assign({ cab: [], fav: [], units: "oz", sound: true, fx: true, pick: [], custom: [] }, safeLoad());
 if (!Array.isArray(S.custom)) S.custom = [];
+delete S.closedShelves;
 function safeLoad() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Couldn't save — storage full?"); } }
 
@@ -131,7 +130,6 @@ function fmtAmt(i, mult = 1) {
 function ingLabel(i) { let n = i.name; if (i.unit === "whole" && i.amt > 1 && !/s$|Anise$/.test(n)) n += "s"; return n; }
 function listJoin(arr) { return arr.length <= 1 ? arr.join("") : arr.slice(0, -1).join(", ") + " and " + arr[arr.length - 1]; }
 
-// Double: which ingredients get doubled (the spirits; liqueur-based drinks double the liqueur)
 const DOUBLE_UNITS = new Set(["oz", "ml", "barspoon", "tsp", "tbsp"]);
 function doubleSet(d) {
   if (d.ex.nodouble || !d.alcoholic || d.cat === "Mocktail") return new Set();
@@ -203,7 +201,7 @@ function buildSteps(d) {
       main.slice(1).forEach(i => steps.push(`Hold a bar spoon upside down just above the surface and slowly pour the ${i.name} over its back so it floats in its own layer.`));
       steps.push("Admire your stripes for exactly one second, then enjoy.");
       break;
-    default: // build
+    default:
       if (main.length) {
         if (up) steps.push(`Pour the ${names(main)} into a chilled ${gl}.`);
         else { steps.push(`Fill a ${gl} with ice.`); steps.push(`Pour in the ${names(main)}.`); }
@@ -271,44 +269,82 @@ function garnishSVG(d, G) {
   if (/strawberr|raspberr|blackberr|berr/.test(t)) s += `<g transform="translate(${rx - 6},${ry - 2})"><path d="M-6 -2 Q0 12 6 -2 Q0 -6 -6 -2 Z" fill="${/black/.test(t) ? "#3a1030" : "#d8283a"}"/><path d="M-4 -4 l4 -4 l4 4" fill="#4fa84a"/></g>`;
   return s;
 }
+// drop + ripple + splash pieces for the hero glass (surface at y = top)
+function dropFX(c, top, clipId) {
+  const drop = `<g class="dropfall" style="--dy:${top + 4}px"><path d="M50 -16 Q46.4 -9.5 46.4 -6.6 A3.6 3.6 0 0 0 53.6 -6.6 Q53.6 -9.5 50 -16 Z" fill="${shade(c, .2)}" stroke="rgba(255,255,255,.65)" stroke-width=".7"/><ellipse cx="48.8" cy="-7.5" rx=".9" ry="1.4" fill="rgba(255,255,255,.8)"/></g>`;
+  const rings = `<g ${clipId ? `clip-path="url(#${clipId})"` : ""}><ellipse class="ring" cx="50" cy="${top + .5}" rx="3" ry=".9" fill="none" stroke="rgba(255,255,255,.85)" stroke-width=".5"/><ellipse class="ring r2" cx="50" cy="${top + .5}" rx="3" ry=".9" fill="none" stroke="rgba(255,255,255,.6)" stroke-width=".4"/></g>`;
+  const spl = [[-7, 1.1], [6, 1.3], [-2, .9], [9, .8]].map(([sx, r]) => `<circle class="splash" style="--sx:${sx}px" cx="50" cy="${top - 1}" r="${r}" fill="${shade(c, .35)}"/>`).join("");
+  return rings + spl + drop;
+}
 function glassSVG(d, opts = {}) {
   const G = GL[d.glass] || GL.rocks; const id = "g" + (++gid); const c = /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : "#e0952e";
+  const hero = !!opts.hero, an = !!opts.anim;
   const glassStroke = 'stroke="rgba(255,236,210,.6)" stroke-width="1.5"';
   let defs = `<linearGradient id="${id}l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, .25)}"/><stop offset="1" stop-color="${shade(c, -.35)}"/></linearGradient>`;
-  let body = "";
+  let body = "", fxTop = "";
   const ings = d.ingredients || [];
+  const noIce = ["Hot", "Frozen"].includes(d.cat) || d.method === "blend";
   if (G.solid) {
     const mats = { copper: ["#e59a5e", "#9a4e22"], silver: ["#f0f0f2", "#8a8e96"], tiki: ["#a8693a", "#5a2e14"], mug: ["#3a3a40", "#1c1c22"] };
     const [a, b] = mats[G.solid];
     defs += `<linearGradient id="${id}m" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${b}"/><stop offset=".35" stop-color="${a}"/><stop offset=".6" stop-color="${b}"/><stop offset="1" stop-color="${shade(b, -.3)}"/></linearGradient>`;
     if (G.h) body += `<path d="${G.h}" fill="none" stroke="url(#${id}m)" stroke-width="6" stroke-linecap="round"/>`;
     body += `<path d="${G.b}" fill="url(#${id}m)"/>`;
-    if (G.surf) { const [cx, cy, rx, ry] = G.surf; body += `<ellipse class="liq" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#${id}l)"/>`; }
+    if (G.surf) {
+      const [cx, cy, rx, ry] = G.surf;
+      body += `<ellipse class="liq" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#${id}l)"/>`;
+      if (hero) body += `<ellipse class="shimmer" cx="${cx - rx * .3}" cy="${cy - .4}" rx="${rx * .35}" ry="${ry * .45}" fill="#fff"/>`;
+      if (hero && an) fxTop = dropFX(c, cy, null);
+    }
     if (G.dome) body += `<path d="M30 36 Q50 14 70 36 Z" fill="#f4f8fb"/><g fill="#4fa84a"><ellipse cx="44" cy="18" rx="4" ry="8" transform="rotate(-25 44 18)"/><ellipse cx="52" cy="14" rx="4" ry="8"/><ellipse cx="59" cy="19" rx="4" ry="8" transform="rotate(25 59 19)"/></g>`;
     if (G.solid === "silver") body += `<path d="M33 40 L35 100" stroke="#fff" stroke-width="3" opacity=".5"/>`;
     if (G.face) body += `<g fill="none" stroke="#2e1608" stroke-width="2.2" stroke-linecap="round"><path d="M35 42 h10 M55 42 h10"/><path d="M38 50 q2 4 4 0 M58 50 q2 4 4 0"/><path d="M50 52 v14"/><path d="M36 78 h28 M40 78 v8 M46 78 v8 M54 78 v8 M60 78 v8 M36 86 h28"/></g>`;
     if (G.steam) body += `<g fill="none" stroke="rgba(255,240,220,.5)" stroke-width="2" stroke-linecap="round"><path class="steam" d="M40 28 q-4 -6 0 -12 q4 -6 0 -12"/><path class="steam" style="animation-delay:1s" d="M50 26 q-4 -6 0 -12 q4 -6 0 -12"/><path class="steam" style="animation-delay:2s" d="M58 28 q-4 -6 0 -12 q4 -6 0 -12"/></g>`;
     if (G.solid === "copper") body += `<path d="M30 40 L32 98" stroke="rgba(255,255,255,.35)" stroke-width="2.5" stroke-linecap="round"/>`;
+    if (hero && an && G.solid !== "mug" && G.solid !== "tiki") {
+      defs += `<clipPath id="${id}g"><path d="${G.b}"/></clipPath>`;
+      body += `<g clip-path="url(#${id}g)"><rect class="glint" x="20" y="0" width="9" height="130" fill="rgba(255,255,255,.55)"/></g>`;
+    }
   } else {
-    defs += `<clipPath id="${id}c"><path d="${G.l}"/></clipPath>`;
+    const top = G.top || 30;
+    defs += `<clipPath id="${id}c"><path d="${hero ? G.b : G.l}"/></clipPath>`;
     if (G.h) body += `<path d="${G.h}" fill="none" stroke-width="4" stroke="rgba(255,236,210,.45)"/>`;
     if (G.x) body += `<g fill="rgba(255,236,210,.55)">${G.x}</g>`;
     body += `<path d="${G.b}" fill="rgba(255,240,220,.06)"/>`;
-    body += `<g clip-path="url(#${id}c)"><path class="liq" d="${G.l}" fill="url(#${id}l)"/>`;
+    body += `<g clip-path="url(#${id}c)">`;
+    if (hero) {
+      // wavy liquid surface that sloshes when it lands
+      const wl = 20, amp = 1.6;
+      let wave = `M-60 ${top}`; for (let x = -60; x < 170; x += wl) wave += ` q${wl / 4} ${-amp} ${wl / 2} 0 t${wl / 2} 0`;
+      const line = wave;
+      wave += ` L170 130 L-60 130 Z`;
+      // keep liquid inside the inner liquid shape horizontally (thin wall look) using a second clip
+      defs += `<clipPath id="${id}i"><path d="${G.l}"/><rect x="0" y="${top - 6}" width="100" height="10"/></clipPath>`;
+      body += `<g clip-path="url(#${id}i)"><g class="slosh${an ? " go" : ""}" style="transform-origin:50px ${top + 25}px"><g class="liq">
+        <path class="wave" d="${wave}" fill="url(#${id}l)"/>
+        <path class="wave w2" d="${line}" fill="none" stroke="${shade(c, .55)}" stroke-width=".9" opacity=".7"/></g></g></g>`;
+    } else {
+      body += `<path class="liq" d="${G.l}" fill="url(#${id}l)"/>`;
+    }
     if (G.cream) body += `<rect class="liq" x="20" y="32" width="60" height="10" fill="#f6ead2"/>`;
     if (d.glass === "pint" && (d.base === "Beer" || /root beer|float/i.test(d.name || ""))) body += `<rect x="20" y="18" width="60" height="8" fill="#fbf1dc"/>`;
-    if (G.ice && !["Hot", "Frozen"].includes(d.cat) && d.method !== "blend") G.ice.forEach(([x, y, s]) => body += `<rect x="${x}" y="${(G.top || 30) + y - 30}" width="${s}" height="${s}" rx="2.5" fill="rgba(255,255,255,.22)" stroke="rgba(255,255,255,.45)" stroke-width=".8" transform="rotate(${(x * 7) % 20 - 10} ${x + s / 2} ${y})"/>`);
+    if (G.ice && !noIce) G.ice.forEach(([x, y, s]) => body += `<g class="ice"><rect x="${x}" y="${top + y - 30}" width="${s}" height="${s}" rx="2.5" fill="rgba(255,255,255,.22)" stroke="rgba(255,255,255,.45)" stroke-width=".8" transform="rotate(${(x * 7) % 20 - 10} ${x + s / 2} ${y})"/></g>`);
     if (G.fruit) body += `<circle cx="40" cy="70" r="8" fill="#f5a03a" opacity=".85"/><circle cx="58" cy="84" r="7" fill="#f0e070" opacity=".8"/><rect x="44" y="92" width="9" height="9" fill="#e85a4a" opacity=".8"/>`;
     const fizzy = ings.some(i => /Soda|Tonic|Sparkling|Ginger|Cola|Beer|Lager|Energy|Root|Prosecco|Champagne/i.test(i.name)) || d.cat === "Bubbly";
-    if (fizzy) for (let k = 0; k < 6; k++) { const bx = 40 + ((k * 37) % 22), by = 100 - (k * 13) % 30; body += `<circle class="bub" cx="${bx}" cy="${by}" r="${1 + (k % 3) * .5}" fill="rgba(255,255,255,.7)" style="animation-delay:${k * .45}s"/>`; }
+    const nb = fizzy ? (hero ? 10 : 6) : (hero ? 3 : 0);
+    for (let k = 0; k < nb; k++) { const bx = 38 + ((k * 37) % 26), by = 102 - (k * 13) % 30; body += `<circle class="bub" cx="${bx}" cy="${by}" r="${1 + (k % 3) * .5}" fill="rgba(255,255,255,.7)" style="animation-delay:${k * .45 + (hero && an ? 1.2 : 0)}s"/>`; }
+    if (hero && an) body += `<rect class="glint" x="20" y="-10" width="9" height="140" fill="rgba(255,255,255,.5)"/>`;
     body += `</g>`;
+    if (hero && an) fxTop = dropFX(c, top, `${id}c`);
     body += `<path d="${G.b}" fill="none" ${glassStroke}/>`;
     body += `<path d="${G.b}" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="3" stroke-dasharray="0 6 24 400" />`;
     if (G.cork) body += `<rect x="41" y="4" width="18" height="12" rx="2" fill="#a8743a"/><rect x="40" y="13" width="20" height="3" fill="#7a4a1e"/>`;
     if (G.straw) body += `<line x1="${G.rim[0] - 12}" y1="${(G.top || 20) + 30}" x2="${G.rim[0] + 2}" y2="${G.rim[1] - 14}" stroke="#e8743a" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>`;
   }
-  body += garnishSVG(d, G);
-  return `<svg class="gl${opts.anim ? " anim" : ""}" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`;
+  const garn = garnishSVG(d, G);
+  body += hero ? `<g class="garn">${garn}</g>` : garn;
+  body += fxTop;
+  return `<svg class="gl${an ? " anim" : ""}${hero ? " hero" : ""}" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`;
 }
 
 // ───────────────────────── Sound (WebAudio) ─────────────────────────
@@ -373,7 +409,7 @@ function ripple(e) {
   r.style.left = e.clientX + "px"; r.style.top = e.clientY + "px"; r.style.width = r.style.height = "160px"; fx.appendChild(r);
   setTimeout(() => r.remove(), 520);
 }
-document.addEventListener("pointerdown", e => { if (e.target.closest("button,.card,.bottle,.chip,.step,label")) ripple(e); }, { passive: true });
+document.addEventListener("pointerdown", e => { if (e.target.closest("button,.card,.bottle,.chip,.step,label,.shelf-h")) ripple(e); }, { passive: true });
 
 (function bokeh() {
   const cv = $("#bokeh"), ctx = cv.getContext("2d"); let W, H; const P = [];
@@ -472,7 +508,8 @@ $("#diceBtn").onclick = () => {
 };
 
 // ───────────────────────── DETAIL SHEET ─────────────────────────
-let openId = null, pour = "single";
+let openId = null, pour = "single", landT = null;
+function scheduleLand() { clearTimeout(landT); if (S.fx) landT = setTimeout(() => { if (openId) sfx("drop"); }, 1500); }
 function openDrink(id) {
   const d = BY_ID[id]; if (!d) return; openId = id; pour = "single";
   renderDetail(true);
@@ -481,7 +518,7 @@ function openDrink(id) {
   if (!(history.state && history.state.d)) history.pushState({ d: id }, "");
 }
 function closeDrink(fromPop) {
-  if (!openId) return; openId = null; $("#sheet").classList.remove("open"); $("#sheet").setAttribute("aria-hidden", "true");
+  if (!openId) return; openId = null; clearTimeout(landT); $("#sheet").classList.remove("open"); $("#sheet").setAttribute("aria-hidden", "true");
   if (!fromPop && history.state && history.state.d) history.back();
   refreshCurrent();
 }
@@ -512,7 +549,8 @@ function renderDetail(anim) {
       <div class="seg unit-seg"><button data-unit="oz">oz</button><button data-unit="ml">ml</button></div>
       <button class="heart round-btn${isFav(d.id) ? " on" : ""}" data-fav="${esc(d.id)}" aria-label="Favorite">${HEART}</button></div>
     <div class="hero"><div class="glow" style="background:${esc(d.color)}"></div>
-      <div class="big-glass">${glassSVG(d, { anim })}</div>
+      <div class="big-glass" id="bigGlass" aria-label="Tap to pour again">${glassSVG(d, { anim: anim && S.fx, hero: true })}</div>
+      <div class="tap-hint">tap the glass for another drop</div>
       <h1>${esc(d.name)}</h1>
       <div class="facts">
         <div class="fact"><small>Style</small><span>${esc(d.cat === "Geeky" ? "🎮 Geeky" : d.cat)}${d.custom ? " · ★ Mine" : ""}</span></div>
@@ -522,7 +560,7 @@ function renderDetail(anim) {
       </div>
       ${d.desc ? `<p>${esc(d.desc)}</p>` : ""}</div>
     ${status}
-    <div class="sec-h"><h3>Ingredients</h3>${canDbl ? "" : ""}</div>
+    <div class="sec-h"><h3>Ingredients</h3></div>
     ${pourBlock}
     <div class="ing" style="margin-top:${canDbl ? 10 : 0}px">${ingRows}</div>
     <div class="hint">Tap a circle to add/remove that ingredient from your Liquor Cabinet.</div>
@@ -538,6 +576,10 @@ function renderDetail(anim) {
 }
 $("#sheetInner").addEventListener("click", e => {
   if (e.target.closest("#shClose")) { closeDrink(); return; }
+  if (e.target.closest("#bigGlass")) {
+    const d = BY_ID[openId]; if (!d) return;
+    $("#bigGlass").innerHTML = glassSVG(d, { anim: S.fx, hero: true }); sfx("drop"); return;
+  }
   const f = e.target.closest("[data-fav]"); if (f) { toggleFav(f.dataset.fav, f); return; }
   const u = e.target.closest("[data-unit]"); if (u) { setUnits(u.dataset.unit); return; }
   const p = e.target.closest("[data-pour]"); if (p) {
@@ -550,7 +592,6 @@ $("#sheetInner").addEventListener("click", e => {
   if (e.target.closest("#remixBtn")) { openBuilder(fromDrink(BY_ID[openId])); return; }
   const dot = e.target.closest(".dot"); if (dot && !dot.disabled) {
     const n = dot.closest(".ing-row").dataset.ing;
-    // if satisfied by a stand-in (plain Whiskey), tapping adds the specific bottle
     toggleCab(n);
     if (S.cab.includes(n)) { const r = dot.getBoundingClientRect(); sparkle(r.left + 11, r.top + 11, 10, ["#9ccc6a", "#d8f0a0", "#fff"]); }
     rerenderDetail(); return;
@@ -579,8 +620,7 @@ let B = null;
 function inferBase(ings) {
   const names = ings.filter(i => i.name && i.flag !== "opt").map(i => i.name.trim());
   for (const n of names) {
-    const sh = SHELF_OF[n];
-    if (sh === "Spirits") {
+    if (SHELF_OF[n] === "Spirits") {
       if (/gin/i.test(n)) return "Gin"; if (/vodka/i.test(n)) return "Vodka"; if (/rum/i.test(n)) return "Rum";
       if (/tequila|mezcal/i.test(n)) return "Tequila"; if (/whisk|bourbon|rye|scotch/i.test(n)) return "Whiskey";
       if (/cognac|brandy|pisco|cacha/i.test(n)) return "Brandy";
@@ -602,7 +642,7 @@ function fromDrink(d) {
     glass: d.glass, method: d.method === "custom" ? "build" : d.method, color: d.color,
     ings: d.ingredients.map(i => ({ amt: i.amt == null ? "" : String(i.amt), unit: i.unit, name: i.name, flag: ingFlag(i), note: i.note || "" })),
     garnish: d.garnish === "None" ? "" : d.garnish, stepsMode: d.ex.steps || d.method === "custom" ? "custom" : "auto",
-    steps: d.ex.steps ? d.ex.steps.slice() : (d.method === "custom" ? buildSteps(d) : []) };
+    steps: d.ex.steps ? d.ex.steps.slice() : (d.method === "custom" ? buildSteps(d) : []), baseTouched: true };
 }
 const UNI = { "¼": .25, "½": .5, "¾": .75, "⅓": 1 / 3, "⅔": 2 / 3, "⅛": .125 };
 function parseAmt(s) {
@@ -752,7 +792,9 @@ $("#newBtn").onclick = () => openBuilder();
 $("#newBtn2").onclick = () => openBuilder();
 
 // ───────────────────────── CABINET ─────────────────────────
-const C = { q: "", only: false, closed: new Set(S.closedShelves || []) };
+// Every visit starts with all shelves collapsed; open them one by one.
+const C = { q: "", only: false, closed: new Set() };
+function collapseAllShelves() { C.closed = new Set(SHELVES.map(s => s[0])); }
 function toggleCab(n) {
   const i = S.cab.indexOf(n);
   if (i >= 0) { S.cab.splice(i, 1); sfx("thunk"); } else { S.cab.push(n); sfx("pop"); }
@@ -781,7 +823,7 @@ $("#cabList").onclick = e => {
     if (S.cab.includes(n)) { const r = b.getBoundingClientRect(); sparkle(r.left + r.width / 2, r.top + r.height / 2, 10); }
     const sc = scrollY; renderCab(); scrollTo(0, sc); return; }
   const h = e.target.closest(".shelf-h");
-  if (h) { const s = h.parentElement.dataset.shelf; C.closed.has(s) ? C.closed.delete(s) : C.closed.add(s); S.closedShelves = [...C.closed]; save(); sfx("tick"); h.parentElement.classList.toggle("closed"); }
+  if (h) { const s = h.parentElement.dataset.shelf; C.closed.has(s) ? C.closed.delete(s) : C.closed.add(s); sfx("tick"); h.parentElement.classList.toggle("closed"); }
 };
 $("#cabQ").oninput = e => { C.q = e.target.value; renderCab(); };
 $("#onlyHaveBtn").onclick = () => { C.only = !C.only; sfx("tick"); renderCab(); };
@@ -865,12 +907,13 @@ $("#importFile").onchange = e => {
   rd.readAsText(f);
 };
 $("#resetBtn").onclick = () => { if (!confirm("Empty your Liquor Cabinet and clear all favorites? (Your own recipes stay.)")) return; S.cab = []; S.fav = []; S.pick = []; save(); sfx("thunk"); toast("Bar wiped clean. Last call!"); refreshCurrent(); };
-function renderAbout() { $("#about").innerHTML = `Garnish v2.0 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
+function renderAbout() { $("#about").innerHTML = `Garnish v2.1 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
 
 // ───────────────────────── Navigation ─────────────────────────
 let current = "menu";
 function show(v) {
   if (v === current) { scrollTo({ top: 0, behavior: "smooth" }); return; }
+  if (current === "cab" || v === "cab") { collapseAllShelves(); C.q = ""; $("#cabQ").value = ""; }
   current = v; sfx("tick");
   $$(".view").forEach(s => s.classList.toggle("active", s.id === "view-" + v));
   $$(".tabbar button").forEach(b => b.classList.toggle("active", b.dataset.view === v));
@@ -882,7 +925,7 @@ function refreshCurrent() {
 $(".tabbar").onclick = e => { const b = e.target.closest("[data-view]"); if (b) show(b.dataset.view); };
 
 // init
-rebuild(); renderChips(); renderMenu(); syncUnits(); syncToggles(); renderAbout();
+rebuild(); collapseAllShelves(); renderChips(); renderMenu(); syncUnits(); syncToggles(); renderAbout(); save();
 window.Garnish = { open: openDrink, ids: () => DR.map(d => d.id), steps: id => buildSteps(BY_ID[id]), build: openBuilder, dbl: id => [...doubleSet(BY_ID[id])].map(i => i.name) };
 
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));

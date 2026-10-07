@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <canvas id="bokeh" aria-hidden="true"></canvas>
@@ -88,9 +88,9 @@
     <div class="panel">
       <div class="set-row"><div><b>Measurements</b><small>1 oz ≈ 30 ml (bar standard)</small></div>
         <div class="seg unit-seg"><button data-unit="oz">oz</button><button data-unit="ml">ml</button></div></div>
-      <div class="set-row"><div><b>Sound effects</b><small>Clinks, pours, pops &amp; shakes</small></div>
+      <div class="set-row"><div><b>Sound effects</b><small>Drops, clinks, pops &amp; shakes</small></div>
         <button class="switch" id="sndSwitch" role="switch"></button></div>
-      <div class="set-row"><div><b>Screen effects</b><small>Candlelight, floating bokeh &amp; sparkles</small></div>
+      <div class="set-row"><div><b>Screen effects</b><small>Candlelight, floating bokeh, glass animations &amp; sparkles</small></div>
         <button class="switch" id="fxSwitch" role="switch"></button></div>
     </div>
     <div class="panel">
@@ -112,14 +112,10 @@
   <button data-view="more"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg><span>More</span></button>
 </nav>
 
-<!-- Drink detail sheet -->
 <div class="sheet" id="sheet" aria-hidden="true"><div class="sheet-inner" id="sheetInner"></div></div>
-
-<!-- Recipe builder sheet -->
 <div class="sheet" id="builder" aria-hidden="true"><div class="sheet-inner" id="builderInner"></div></div>
 <datalist id="ingList"></datalist>
 
-<!-- Bartender's choice overlay -->
 <div class="roulette" id="roulette"><div class="rl-glass" id="rlGlass"></div><div class="rl-name" id="rlName"></div><div class="rl-sub">The bartender is choosing…</div></div>
 
 <div class="toast" id="toast"></div>
@@ -127,7 +123,7 @@
 
 <div class="rotate-lock"><div class="rl-inner"><div class="rl-ico">🍸</div><b>Whoa there, tilt it back.</b><span>Garnish only pours in portrait.</span></div></div>
 
-<script src="drinks.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="drinks.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
