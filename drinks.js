@@ -499,3 +499,48 @@ window.DRINKS.push(
 ["Dirty Shirley","Highball","highball","build","#f26a82","Vodka","A grown-up Shirley Temple with vodka. Pure nostalgia with a kick.",
  ["1.5|oz|Vodka","5|oz|Lemon-Lime Soda|top","0.75|oz|Grenadine"],"Lots of maraschino cherries"]
 );
+
+/* ───────── SPOOKY SEASON ───────── */
+window.DRINKS.push(
+["El Diablo","Spooky","highball","shakeR","#8a1d3a","Tequila","A devilish 1940s Trader Vic classic: tequila, blackcurrant and lime under a fiery ginger beer cap.",
+ ["1.5|oz|Tequila Reposado","0.5|oz|Crème de Cassis","0.5|oz|Lime Juice","3|oz|Ginger Beer|top"],"Lime wedge"],
+["Satan's Whiskers","Spooky","coupe","shake","#e8822e","Gin","A Savoy Cocktail Book classic with a wicked name — gin, both vermouths, orange and Grand Marnier.",
+ ["0.75|oz|Gin","0.75|oz|Sweet Vermouth","0.75|oz|Dry Vermouth","0.75|oz|Orange Juice","0.5|oz|Grand Marnier","1|dash|Orange Bitters"],"Orange twist"],
+["Devil's Margarita","Spooky","coupe","shake","#7a1424","Tequila","A classic margarita haunted by a blood-red float of wine.",
+ ["1.5|oz|Tequila Blanco","1|oz|Lime Juice","0.75|oz|Simple Syrup","0.5|oz|Red Wine|float|dry, fruity"],"Lime wheel"],
+["Corpse Reviver #1","Spooky","coupe","stir","#9c4a1f","Brandy","The brooding, brandy-based older sibling of the #2 — a 'hair of the dog' from the 1930s.",
+ ["1.5|oz|Cognac","0.75|oz|Apple Brandy||Calvados or applejack","0.75|oz|Sweet Vermouth"],"Orange peel"],
+["Jack-O'-Lantern","Spooky","rocks","shakeR","#f08a24","Brandy","Glowing pumpkin-orange: cognac, orange liqueur and OJ topped with ginger ale. (House spec.)",
+ ["1.5|oz|Cognac","0.5|oz|Grand Marnier","1|oz|Orange Juice","2|oz|Ginger Ale|top"],"Orange slice carved like a jack-o'-lantern"],
+["Brain Hemorrhage","Spooky","shot","custom","#f2b8a0","Liqueur","The gross-out party shot: Irish cream curdles into a 'brain', grenadine adds the gore. Tastes like peaches & cream.",
+ ["1|oz|Peach Schnapps","0.25|oz|Irish Cream","3|drop|Grenadine"],"None — it's gross enough",
+ {steps:["Pour the peach schnapps into a shot glass.","Very slowly drizzle the Irish cream over the back of a spoon — it clumps into a wrinkly little brain.","Drip the grenadine in last so it bleeds down through the brain.","Show it to your friends. Watch them recoil. Drink it."]}],
+["Candy Corn Shot","Spooky","shot","layer","#f5a623","Liqueur","Three-layer shot striped exactly like the Halloween candy everyone pretends to hate.",
+ ["0.5|oz|Grenadine","0.5|oz|Orange Curaçao","0.5|oz|Heavy Cream"],"None"],
+["Vampire's Kiss","Spooky","flute","build","#a3123a","Vodka","Blood-red bubbly with a raspberry bite and a sugar rim that sparkles like fangs. (House build.)",
+ ["1|oz|Vodka","0.5|oz|Raspberry Liqueur","3|oz|Sparkling Wine|top"],"Red sugar rim",{pre:["Wet the rim with a lemon wedge and dip it in red sugar (or drip grenadine down the inside for a 'bleeding' look)."]}],
+["Witch's Brew Punch","Spooky","pitcher","custom","#6ac43a","Vodka","A bubbling green cauldron punch for Halloween parties. Serves about 8.",
+ ["6|oz|Vodka","6|oz|Melon Liqueur","16|oz|Pineapple Juice","3|oz|Lime Juice","24|oz|Lemon-Lime Soda|top","4|scoop|Lime Sherbet"],"Gummy worms and a floating 'ice hand'",
+ {serves:8,nodouble:1,steps:["The day before: fill a food-safe glove with water, tie it off and freeze it for a creepy floating ice hand.","Stir the vodka, melon liqueur, pineapple juice and lime juice in a punch bowl or cauldron. Chill.","Right before guests arrive, add the ice hand and scoops of lime sherbet.","Slowly pour in the lemon-lime soda — the sherbet foams up like a bubbling brew.","Hang gummy worms over the rim. For fog, set dry ice in a separate outer bowl with warm water — never in the drinks."]}],
+["Poison Apple","Spooky","coupe","shake","#6a0e22","Brandy","Dark, glossy and tempting, like something an evil queen would offer. (House build.)",
+ ["1.5|oz|Apple Brandy","0.5|oz|Crème de Cassis","0.5|oz|Lemon Juice","0.25|oz|Cinnamon Syrup","1|oz|Apple Cider"],"Black sugar rim and a thin apple slice",{pre:["Rim the glass with black sanding sugar."]}],
+["The Haddonfield","Spooky","rocks","shakeR","#c27a2c","Whiskey","Bourbon, cider and maple, named for a quiet Illinois town where absolutely nothing bad happens on October 31st. (House build.)",
+ ["2|oz|Bourbon","3|oz|Apple Cider","0.25|oz|Maple Syrup","2|dash|Angostura Bitters"],"Cinnamon stick and apple slice"],
+["Black Widow","Spooky","coupe","shake","#2a0f1e","Vodka","Inky blackberry sour with a bite. Pretty, dark, a little dangerous. (House build.)",
+ ["1.5|oz|Vodka","0.75|oz|Crème de Mûre","0.75|oz|Lime Juice","0.5|oz|Simple Syrup"],"Blackberry on a pick (the spider)"],
+["Swamp Water","Spooky","highball","shakeR","#9cb83a","Liqueur","A real 1970s Chartreuse promo drink: green, herbal and murky like a bayou at midnight.",
+ ["1.5|oz|Green Chartreuse","4|oz|Pineapple Juice","0.75|oz|Lime Juice"],"Lime wheel"],
+["Graveyard Dirt Martini","Spooky","martini","shake","#4a2c1c","Vodka","A chocolate martini buried in Oreo 'dirt' with worms crawling out. Dessert from the grave. (House build.)",
+ ["1.5|oz|Vodka","1|oz|Crème de Cacao","1|oz|Irish Cream"],"Crushed Oreo rim and gummy worms",{pre:["Dip the rim in chocolate syrup, then in crushed Oreos."]}],
+["Pumpkin Spice White Russian","Spooky","rocks","build","#e2b07a","Vodka","The Dude goes to a pumpkin patch.",
+ ["1.5|oz|Vodka","1|oz|Coffee Liqueur","0.5|oz|Pumpkin Spice Syrup","1.5|oz|Heavy Cream|float"],"Pinch of cinnamon on top"],
+["Bubbling Cauldron","Spooky","potion","custom","#7ad04a","None","Zero-proof witch's brew for the little monsters (and designated drivers).",
+ ["2|scoop|Lime Sherbet","3|oz|Pineapple Juice","4|oz|Lemon-Lime Soda|top"],"Gummy worms",
+ {steps:["Scoop the lime sherbet into a glass or potion bottle.","Pour in the pineapple juice.","Slowly top with lemon-lime soda and watch it foam over like a cauldron.","Hang a gummy worm over the edge."]}],
+["Ghost Float","Spooky","pint","custom","#f4ecd8","None","A spooky-cute zero-proof float with a little ghost face.",
+ ["2|scoop|Vanilla Ice Cream","8|oz|Cream Soda"],"Mini chocolate chips for ghost eyes",
+ {steps:["Chill a tall glass.","Add two scoops of vanilla ice cream.","Slowly pour in the cream soda.","Press two mini chocolate chips into the top scoop for ghost eyes. Boo."]}]
+);
+/* batch-size info for big-batch recipes */
+(() => { const S = {"Sangria":6,"White Sangria":6,"Fish House Punch":12,"Wassail":8,"Mulled Wine":5,"Jello Shots":16};
+  window.DRINKS.forEach(r => { if (S[r[0]]) { r[9] = r[9] || {}; r[9].serves = S[r[0]]; } }); })();

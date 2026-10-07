@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <canvas id="bokeh" aria-hidden="true"></canvas>
@@ -40,6 +40,7 @@
     </div>
     <div class="chips scroll" id="catChips"></div>
     <div class="chips scroll" id="baseChips"></div>
+    <div class="chips scroll" id="flavorChips"></div>
     <div class="list-meta"><span id="menuCount"></span>
       <button class="mini-toggle" id="readyToggle">Only what I can make</button></div>
     <div class="cards" id="menuList"></div>
@@ -118,12 +119,18 @@
 
 <div class="roulette" id="roulette"><div class="rl-glass" id="rlGlass"></div><div class="rl-name" id="rlName"></div><div class="rl-sub">The bartender is choosing…</div></div>
 
+<div class="shareov" id="shareOv"><div class="so-inner">
+  <div class="so-head"><b>Share card</b><span id="soTitle"></span></div>
+  <div class="so-img"><img id="soImg" alt="Recipe card"></div>
+  <div class="so-btns"><button class="pill-btn primary" id="soShare">💬 Text / Share</button><a class="pill-btn" id="soSave">⬇️ Save image</a><button class="pill-btn" id="soClose">Close</button></div>
+  <div class="hint" style="text-align:center">Tip: long-press the card to save it straight to Photos.</div>
+</div></div>
 <div class="toast" id="toast"></div>
 <div class="fxlayer" id="fxlayer"></div>
 
 <div class="rotate-lock"><div class="rl-inner"><div class="rl-ico">🍸</div><b>Whoa there, tilt it back.</b><span>Garnish only pours in portrait.</span></div></div>
 
-<script src="drinks.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="drinks.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

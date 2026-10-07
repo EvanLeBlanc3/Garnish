@@ -1,6 +1,6 @@
 /* Garnish service worker — network-first so updates show immediately, cache fallback for offline. */
-const CACHE = "garnish-v6";
-const FILES = ["./", "index.html", "style.css?v=6", "app.js?v=6", "drinks.js?v=6", "manifest.webmanifest",
+const CACHE = "garnish-v7";
+const FILES = ["./", "index.html", "style.css?v=7", "app.js?v=7", "drinks.js?v=7", "manifest.webmanifest",
   "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {

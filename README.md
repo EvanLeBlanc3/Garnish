@@ -1,6 +1,6 @@
 # 🍸 Garnish — your pocket bartender
 
-211 cocktails & mocktails, a Liquor Cabinet, your own custom recipes, Single/Double pours, a "What can I make?" matchmaker, favorites, oz/ml toggle, sound & screen effects. Works offline after first load. Portrait only.
+228 cocktails (17 spooky) & mocktails, a Liquor Cabinet, your own custom recipes, Single/Double pours, party batch scaler, strength meter, flavor filters, share cards, a "What can I make?" matchmaker, favorites, oz/ml toggle, sound & screen effects. Works offline after first load. Portrait only.
 
 ## Updating your existing GitHub install
 1. Open your Garnish repo on GitHub → **Add file → Upload files**.

@@ -9,7 +9,7 @@ const BASE_SHELVES = [
  ["Wine, Vermouth & Beer","🍷",["Sweet Vermouth","Dry Vermouth","Lillet Blanc","Dry Sherry","Sparkling Wine","Red Wine","White Wine","Rosé Wine","Lager Beer","Stout"]],
  ["Mixers & Sodas","🫧",["Club Soda","Tonic Water","Ginger Beer","Ginger Ale","Cola","Lemon-Lime Soda","Grapefruit Soda","Cream Soda","Root Beer","Energy Drink","Lemonade","Iced Tea","Espresso","Coffee","Hot Chocolate"]],
  ["Juices & Purées","🍊",["Lemon Juice","Lime Juice","Orange Juice","Grapefruit Juice","Pineapple Juice","Cranberry Juice","Cran-Apple Juice","Pomegranate Juice","Tomato Juice","Clamato","Apple Cider","Pear Nectar","Peach Purée","Passion Fruit Purée","Coconut Cream","Pickle Brine","Olive Brine"]],
- ["Syrups & Sweeteners","🍯",["Simple Syrup","Demerara Syrup","Honey Syrup","Honey-Ginger Syrup","Agave Syrup","Grenadine","Orgeat","Cinnamon Syrup","Lavender Syrup","Vanilla Syrup","Raspberry Syrup","Chocolate Syrup","Butterscotch Syrup","Sour Mix","Sugar","Sugar Cube","Brown Sugar","Orange Marmalade"]],
+ ["Syrups & Sweeteners","🍯",["Simple Syrup","Demerara Syrup","Honey Syrup","Honey-Ginger Syrup","Agave Syrup","Grenadine","Orgeat","Cinnamon Syrup","Lavender Syrup","Vanilla Syrup","Raspberry Syrup","Chocolate Syrup","Butterscotch Syrup","Maple Syrup","Pumpkin Spice Syrup","Sour Mix","Sugar","Sugar Cube","Brown Sugar","Orange Marmalade"]],
  ["Bitters & Aromatics","💧",["Angostura Bitters","Orange Bitters","Peychaud's Bitters","Orange Flower Water"]],
  ["Dairy & Eggs","🥚",["Egg White","Whole Egg","Heavy Cream","Half & Half","Milk","Butter","Vanilla Ice Cream","Lime Sherbet"]],
  ["Fresh Produce","🍋",["Lemon","Lime","Orange","Apple","Peach","Banana","Strawberries","Cucumber","Jalapeño","Mint Leaves"]],
@@ -30,7 +30,7 @@ function covers(name, have) {
   return null;
 }
 
-const CATS = ["All","Classic","Martini","Sour","Highball","Bubbly","Tiki","Frozen","Dessert","Hot","Shot","Punch","Geeky","Mocktail"];
+const CATS = ["All","Classic","Martini","Sour","Highball","Bubbly","Tiki","Frozen","Dessert","Hot","Shot","Punch","Spooky","Geeky","Mocktail"];
 const BASES = ["Any spirit","Gin","Vodka","Rum","Tequila","Whiskey","Brandy","Wine","Beer","Liqueur","Zero-proof"];
 const GLASS_WORD = {martini:"martini glass",coupe:"coupe glass",rocks:"rocks glass",highball:"highball glass",collins:"Collins glass",
  margarita:"margarita glass",mule:"copper mug",shot:"shot glass",hurricane:"hurricane glass",wine:"wine glass",julep:"julep cup",
@@ -65,9 +65,98 @@ function parseDrink(r, customId) {
   const required = [...new Set(ingredients.filter(i => !i.opt && !ALWAYS.has(i.name)).map(i => i.name))];
   const alcoholic = ingredients.some(i => !i.opt && BOOZE_SHELVES.has(SHELF_BASE_OF[i.name])) || (!!customId && base !== "None");
   const d = { id: customId || slug(name), name, cat, glass, method, color, base, desc, ingredients, garnish, ex, required, alcoholic, custom: !!customId };
-  d.search = norm(name + " " + ingredients.map(i => i.name + " " + i.note).join(" ") + " " + cat + " " + base + (customId ? " mine my recipe custom" : ""));
+  d.flavors = flavorsOf(d); d.abv = strength(d).abv;
+  d.search = norm(d.flavors.join(" ") + " " + name + " " + ingredients.map(i => i.name + " " + i.note).join(" ") + " " + cat + " " + base + (customId ? " mine my recipe custom" : ""));
   return d;
 }
+// ───────────────────────── Strength & flavor analysis ─────────────────────────
+const ABV = {
+  "Overproof Rum":75,"Absinthe":60,"Islay Scotch":46,"Green Chartreuse":55,"Yellow Chartreuse":40,"Triple Sec":40,"Grand Marnier":40,
+  "Orange Curaçao":30,"Blue Curaçao":22,"Amaretto":24,"Coffee Liqueur":20,"Irish Cream":17,"Campari":24,"Aperol":11,"Averna":29,
+  "Amaro Nonino":35,"Amer Picon":18,"Fernet-Branca":39,"Suze":15,"Maraschino Liqueur":32,"Crème de Violette":16,"Elderflower Liqueur":20,
+  "Crème de Cassis":16,"Crème de Menthe":24,"White Crème de Menthe":24,"Crème de Cacao":24,"Crème de Mûre":16,"Crème de Noyaux":25,
+  "Cherry Heering":24,"Peach Schnapps":20,"Sour Apple Schnapps":18,"Butterscotch Schnapps":18,"Peppermint Schnapps":24,"Watermelon Schnapps":18,
+  "Melon Liqueur":20,"Raspberry Liqueur":16.5,"Banana Liqueur":25,"Passion Fruit Liqueur":20,"Pear Liqueur":20,"Galliano":42.3,"Drambuie":40,
+  "Bénédictine":40,"Limoncello":30,"Hpnotiq":17,"Jägermeister":35,"Sloe Gin":26,"Southern Comfort":35,"Licor 43":31,"Sambuca":38,
+  "Pimm's No. 1":25,"Falernum":11,"Sweet Vermouth":16,"Dry Vermouth":17,"Lillet Blanc":17,"Dry Sherry":15,"Sparkling Wine":12,
+  "Red Wine":13.5,"White Wine":12.5,"Rosé Wine":12,"Lager Beer":5,"Stout":4.2
+};
+const abvOf = n => ABV[n] != null ? ABV[n] : SHELF_BASE_OF[n] === "Spirits" ? 40 : SHELF_BASE_OF[n] === "Liqueurs & Amari" ? 25 : 0;
+const VOL_UNIT = { oz: 1, ml: 1 / 30, dash: 1 / 32, drop: 0.002, barspoon: 0.17, tsp: 0.17, tbsp: 0.5, cup: 8, splash: 0.25, scoop: 2 };
+function volOz(i) {
+  if (i.amt == null) return 0;
+  if (i.unit === "whole") return i.name === "Egg White" ? 1 : i.name === "Whole Egg" ? 1.7 : 0;
+  return (VOL_UNIT[i.unit] || 0) * i.amt;
+}
+const DILUTION = { shake: .25, shakeR: .2, dry: .25, muddle: .25, stir: .2, stirR: .15, build: .1, blend: .35, layer: 0, custom: .12 };
+// per-glass strength; mult = how many times the spirits are multiplied (Double = 2)
+function strength(d, dblSet) {
+  let alc = 0, tot = 0;
+  d.ingredients.forEach(i => {
+    if (i.opt || i.side || i.unit === "rinse") return;
+    const v = volOz(i) * (dblSet && dblSet.has(i) ? 2 : 1);
+    tot += v; alc += v * abvOf(i.name) / 100;
+  });
+  const hot = d.cat === "Hot" || ["hot", "irish"].includes(d.glass);
+  tot *= 1 + (hot ? 0 : (DILUTION[d.method] || .1));
+  const serves = (d.ex && d.ex.serves) || 1;
+  const abv = tot ? alc / tot * 100 : 0;
+  return { abv, std: alc / serves / 0.6 };
+}
+function strengthLabel(a) {
+  if (a < 0.5) return ["Zero-proof", "🍃"]; if (a < 8) return ["Light", "🪶"]; if (a < 15) return ["Easy-going", "🙂"];
+  if (a < 22) return ["Medium", "🥃"]; if (a < 30) return ["Strong", "💪"]; return ["Rocket fuel", "🚀"];
+}
+const FLAVORS = [["Sweet","🍬"],["Sour","🍋"],["Bitter","🥀"],["Boozy","🥃"],["Fruity","🍓"],["Creamy","🥛"],["Smoky","🔥"],["Spicy","🌶️"],["Herbal","🌿"],["Bubbly","🫧"],["Coffee","☕"]];
+const FL_ICON = Object.fromEntries(FLAVORS);
+const SYRUPS = new Set(["Simple Syrup","Demerara Syrup","Honey Syrup","Honey-Ginger Syrup","Agave Syrup","Grenadine","Orgeat","Cinnamon Syrup","Lavender Syrup","Vanilla Syrup","Raspberry Syrup","Chocolate Syrup","Butterscotch Syrup","Maple Syrup","Pumpkin Spice Syrup"]);
+const SWEET_SODA = new Set(["Cola","Lemon-Lime Soda","Ginger Ale","Cream Soda","Root Beer","Energy Drink","Lemonade","Grapefruit Soda"]);
+const SWEET_JUICE = new Set(["Pineapple Juice","Orange Juice","Cran-Apple Juice","Peach Purée","Passion Fruit Purée","Pear Nectar","Apple Cider"]);
+const BITTER = new Set(["Campari","Aperol","Fernet-Branca","Averna","Amaro Nonino","Amer Picon","Suze","Tonic Water"]);
+const FRUIT = new Set(["Orange Juice","Pineapple Juice","Cranberry Juice","Cran-Apple Juice","Pomegranate Juice","Grapefruit Juice","Apple Cider","Pear Nectar","Peach Purée","Passion Fruit Purée","Peach Schnapps","Sour Apple Schnapps","Watermelon Schnapps","Melon Liqueur","Raspberry Liqueur","Banana Liqueur","Passion Fruit Liqueur","Pear Liqueur","Crème de Cassis","Crème de Mûre","Cherry Heering","Limoncello","Hpnotiq","Sloe Gin","Pear Vodka","Raspberry Syrup","Strawberries","Banana","Peach","Apple","Orange"]);
+const CREAMY = new Set(["Heavy Cream","Half & Half","Milk","Irish Cream","Vanilla Ice Cream","Coconut Cream","Whole Egg","Egg White","Lime Sherbet","Butter"]);
+const SPICY = new Set(["Jalapeño","Hot Sauce","Horseradish","Ginger Beer","Honey-Ginger Syrup","Cinnamon","Cinnamon Stick","Cinnamon Syrup","Pumpkin Spice Syrup","Whole Cloves","Spiced Rum"]);
+const HERBAL = new Set(["Green Chartreuse","Yellow Chartreuse","Bénédictine","Absinthe","Mint Leaves","Jägermeister","Galliano","Elderflower Liqueur","Lavender Syrup","Crème de Violette","Crème de Menthe","White Crème de Menthe","Peppermint Schnapps","Drambuie","Pimm's No. 1","Cucumber","Sambuca","Star Anise"]);
+const FIZZ = new Set(["Club Soda","Tonic Water","Ginger Beer","Ginger Ale","Cola","Lemon-Lime Soda","Grapefruit Soda","Cream Soda","Root Beer","Energy Drink","Sparkling Wine","Lager Beer","Stout"]);
+const COFFEE = new Set(["Espresso","Coffee","Coffee Liqueur"]);
+function flavorsOf(d) {
+  const ings = d.ingredients.filter(i => !i.opt && !i.side);
+  let sweet = 0, sour = 0, fruit = 0, fizz = 0; const f = new Set();
+  for (const i of ings) {
+    const v = volOz(i), n = i.name;
+    if (n === "Lemon Juice" || n === "Lime Juice") sour += v;
+    else if (n === "Sour Mix") { sour += v; sweet += v * .5; }
+    else if (n === "Grapefruit Juice") sour += v * .4;
+    else if (n === "Cranberry Juice" || n === "Pomegranate Juice") sour += v * .3;
+    else if ((n === "Lime" || n === "Lemon") && i.unit !== "slice") sour += (i.unit === "whole" ? 1 : .3) * (i.amt || 1);
+    if (SYRUPS.has(n)) sweet += v;
+    else if (n === "Sugar") sweet += (i.unit === "cup" ? 8 : .35) * (i.amt || 0);
+    else if (n === "Sugar Cube") sweet += .25 * (i.amt || 1);
+    else if (n === "Brown Sugar") sweet += (i.unit === "cup" ? 8 : .35) * (i.amt || 0);
+    else if (SHELF_BASE_OF[n] === "Liqueurs & Amari" && !BITTER.has(n)) sweet += v * .7;
+    else if (SWEET_SODA.has(n)) sweet += v * .25;
+    else if (SWEET_JUICE.has(n)) sweet += v * .2;
+    else if (n === "Coconut Cream") sweet += v * .6;
+    else if (n === "Vanilla Ice Cream" || n === "Lime Sherbet") sweet += (i.amt || 1);
+    else if (n === "Sweet Vermouth") sweet += v * .3;
+    else if (n === "Gelatin Mix") { sweet += 1; fruit += 1; }
+    if (FRUIT.has(n)) fruit += Math.max(v, ["whole", "slice", "wedge"].includes(i.unit) ? 1 : 0);
+    if (FIZZ.has(n)) fizz += v;
+    if (BITTER.has(n) && (v >= .5 || n === "Fernet-Branca")) f.add("Bitter");
+    if (CREAMY.has(n)) f.add("Creamy");
+    if (n === "Mezcal" || n === "Islay Scotch") f.add("Smoky");
+    if (SPICY.has(n)) f.add("Spicy");
+    if (HERBAL.has(n) || (n === "Gin" && v >= 1.5)) f.add("Herbal");
+    if (COFFEE.has(n)) f.add("Coffee");
+  }
+  if (sweet - sour * .5 >= .6) f.add("Sweet");
+  if (sour >= .6) f.add("Sour");
+  if (fruit >= 1) f.add("Fruity");
+  if (fizz >= 1) f.add("Bubbly");
+  if (strength(d).abv >= 23 && fizz < 1) f.add("Boozy");
+  return FLAVORS.map(x => x[0]).filter(x => f.has(x));
+}
+
 const BUILTIN = window.DRINKS.map(r => parseDrink(r));
 const clean = s => String(s == null ? "" : s).replace(/\|/g, "/");
 function customToTuple(c) {
@@ -117,13 +206,18 @@ const PLURAL = { dash: "dashes", drop: "drops", barspoon: "barspoons", cup: "cup
 function fmtAmt(i, mult = 1) {
   const u = i.unit; if (i.amt == null) return u === "top" ? "top up" : "";
   const a = i.amt * mult;
-  if (u === "oz") return S.units === "ml" ? mlOf(a) + " ml" : frac(Math.round(a * 4) / 4 || a) + " oz";
+  if (u === "oz") {
+    if (S.units === "ml") { const ml = a * 30; return ml >= 1000 ? +(ml / 1000).toFixed(2) + " L" : mlOf(a) + " ml"; }
+    const q = Math.round(a * 4) / 4 || a;
+    return frac(q) + " oz" + (a >= 16 ? ` (${frac(Math.round(a / 8 * 4) / 4)} cups)` : "");
+  }
   if (u === "ml") return S.units === "ml" ? +a.toFixed(1) + " ml" : frac(Math.round(a / 30 * 4) / 4 || +(a / 30).toFixed(2)) + " oz";
   if (u === "cup") return S.units === "ml" ? Math.round(a * 240) + " ml" : frac(a) + (a > 1 ? " cups" : " cup");
   if (u === "tsp" || u === "tbsp") return S.units === "ml" ? +(a * (u === "tsp" ? 5 : 15)).toFixed(1) + " ml" : frac(a) + " " + u;
   if (u === "rinse") return "rinse";
-  if (u === "splash") return mult > 1 ? "big splash" : "splash";
+  if (u === "splash") return mult > 1 ? `${Math.round(mult)} splashes` : "splash";
   if (u === "top") return "top up";
+  if (mult > 1 && a > 1) { const r = Math.round(a * 4) / 4; if (u === "whole" || u === "leaves") return frac(r) + (u === "leaves" ? " leaves" : ""); return frac(r) + " " + (PLURAL[u] || u); }
   if (u === "whole" || u === "leaves") return frac(a) + (u === "leaves" ? " leaves" : "");
   return frac(a) + " " + (a > 1 ? (PLURAL[u] || u) : u);
 }
@@ -450,7 +544,7 @@ function cardHTML(d, have, missOverride) {
   return `<div class="card" data-id="${esc(d.id)}" style="--c:${esc(d.color)}">
     <div class="thumb">${glassSVG(d)}</div>
     <div class="info"><div class="nm">${esc(d.name)}</div>
-      <div class="sub">${esc(baseLabel(d))} · ${esc(d.cat)}</div>${badge}</div>
+      <div class="sub">${esc(baseLabel(d))} · ${esc(d.cat)}${d.abv >= .5 ? ` · ${Math.round(d.abv)}%` : ""}</div>${badge}</div>
     <button class="heart${isFav(d.id) ? " on" : ""}" data-fav="${esc(d.id)}" aria-label="Favorite">${HEART}</button></div>`;
 }
 function bindCards(root) {
@@ -471,11 +565,12 @@ function toggleFav(id, el) {
 }
 
 // ───────────────────────── MENU ─────────────────────────
-const M = { cat: "All", base: "Any spirit", q: "", ready: false };
+const M = { cat: "All", base: "Any spirit", q: "", ready: false, fl: new Set() };
 function renderChips() {
   const cats = S.custom.length ? ["All", "★ Mine", ...CATS.slice(1)] : CATS;
   if (!cats.includes(M.cat)) M.cat = "All";
-  $("#catChips").innerHTML = cats.map(c => `<button class="chip${M.cat === c ? " on" : ""}" data-c="${c}">${c === "Geeky" ? "🎮 Geeky" : c === "Mocktail" ? "Mocktails" : c}</button>`).join("");
+  $("#catChips").innerHTML = cats.map(c => `<button class="chip${M.cat === c ? " on" : ""}" data-c="${c}">${c === "Geeky" ? "🎮 Geeky" : c === "Spooky" ? "🎃 Spooky" : c === "Mocktail" ? "Mocktails" : c}</button>`).join("");
+  $("#flavorChips").innerHTML = `<span class="chip-lbl">Taste</span>` + FLAVORS.map(([f, e]) => `<button class="chip sm${M.fl.has(f) ? " on" : ""}" data-fl="${f}">${e} ${f}</button>`).join("");
   $("#baseChips").innerHTML = BASES.map(b => `<button class="chip sm${M.base === b ? " on" : ""}" data-b="${b}">${b}</button>`).join("");
 }
 function renderMenu() {
@@ -483,7 +578,8 @@ function renderMenu() {
   const list = DR.filter(d => (M.cat === "All" || (M.cat === "★ Mine" ? d.custom : d.cat === M.cat)) &&
     (M.base === "Any spirit" || (M.base === "Zero-proof" ? !d.alcoholic : d.base === M.base)) &&
     (!q || q.split(/\s+/).every(w => d.search.includes(w))) &&
-    (!M.ready || !missingFor(d, have).length));
+    (!M.ready || !missingFor(d, have).length) &&
+    [...M.fl].every(f => d.flavors.includes(f)));
   $("#menuCount").textContent = `${list.length} drink${list.length === 1 ? "" : "s"}`;
   $("#readyToggle").classList.toggle("on", M.ready);
   $("#menuList").innerHTML = list.length ? list.map(d => cardHTML(d, have)).join("") :
@@ -491,6 +587,7 @@ function renderMenu() {
 }
 $("#catChips").onclick = e => { const b = e.target.closest("[data-c]"); if (!b) return; M.cat = b.dataset.c; sfx("tick"); renderChips(); renderMenu(); };
 $("#baseChips").onclick = e => { const b = e.target.closest("[data-b]"); if (!b) return; M.base = b.dataset.b; sfx("tick"); renderChips(); renderMenu(); };
+$("#flavorChips").onclick = e => { const b = e.target.closest("[data-fl]"); if (!b) return; const f = b.dataset.fl; M.fl.has(f) ? M.fl.delete(f) : M.fl.add(f); sfx("tick"); renderChips(); renderMenu(); };
 $("#q").oninput = e => { M.q = e.target.value; renderMenu(); };
 $("#readyToggle").onclick = () => { M.ready = !M.ready; sfx(M.ready ? "fizz" : "tick"); renderMenu(); if (M.ready && !S.cab.length) toast("Your cabinet is empty — add bottles first!"); };
 bindCards($("#menuList"));
@@ -508,10 +605,10 @@ $("#diceBtn").onclick = () => {
 };
 
 // ───────────────────────── DETAIL SHEET ─────────────────────────
-let openId = null, pour = "single", landT = null;
+let openId = null, pour = "single", landT = null, batchOn = false, serves = 1;
 function scheduleLand() { clearTimeout(landT); if (S.fx) landT = setTimeout(() => { if (openId) sfx("drop"); }, 1500); }
 function openDrink(id) {
-  const d = BY_ID[id]; if (!d) return; openId = id; pour = "single";
+  const d = BY_ID[id]; if (!d) return; openId = id; pour = "single"; batchOn = false; serves = (d.ex && d.ex.serves) || 1;
   renderDetail(true);
   $("#sheet").classList.add("open"); $("#sheet").setAttribute("aria-hidden", "false");
   $("#sheetInner").scrollTop = 0; sfx("drop");
@@ -524,25 +621,89 @@ function closeDrink(fromPop) {
 }
 addEventListener("popstate", () => { if ($("#builder").classList.contains("open")) closeBuilder(); else if (openId) closeDrink(true); });
 function rerenderDetail() { const sc = $("#sheetInner").scrollTop; renderDetail(false); $("#sheetInner").scrollTop = sc; }
+const baseServes = d => (d.ex && d.ex.serves) || 1;
+function detailCtx(d) {
+  const dbl = doubleSet(d), canDbl = dbl.size > 0, isDbl = canDbl && pour === "double";
+  const bm = batchOn ? serves / baseServes(d) : 1;
+  const multOf = i => (isDbl && dbl.has(i) ? 2 : 1) * bm;
+  return { dbl, canDbl, isDbl, bm, multOf };
+}
+function ingRowsHTML(d, have, X) {
+  return d.ingredients.map(i => {
+    const always = ALWAYS.has(i.name), using = covers(i.name, have);
+    const cls = using ? (using === i.name || always ? "have" : "sub") : "miss";
+    const subNote = using && using !== i.name && !always ? `<small class="subnote">✓ Using your ${esc(using)}</small>` : "";
+    const x2 = X.isDbl && X.dbl.has(i);
+    const m = X.multOf(i);
+    return `<div class="ing-row" data-ing="${esc(i.name)}"><button class="dot ${cls}${i.opt ? " opt" : ""}" ${always ? "disabled" : ""} aria-label="Toggle in cabinet">✓</button>
+      <div class="ing-name"><b>${esc(ingLabel(i))}</b>${i.opt ? ' <small style="display:inline;color:var(--amber)">optional</small>' : ""}${i.note ? `<small>${esc(i.note)}</small>` : ""}${subNote}</div>
+      <div class="amt${x2 ? " dbl" : ""}${batchOn && X.bm > 1 ? " bat" : ""}">${esc(fmtAmt(i, m))}${x2 ? '<span class="x2">×2</span>' : ""}</div></div>`;
+  }).join("");
+}
+function qtr(n) { const q = Math.ceil(n * 4) / 4; return q < .25 ? "under ¼" : frac(q); }
+const JUICE_FRUIT = { "Lemon Juice": ["lemon", 1.5], "Lime Juice": ["lime", 1], "Orange Juice": ["orange", 2.5], "Grapefruit Juice": ["grapefruit", 5] };
+function batchInfoHTML(d, X) {
+  if (!batchOn) return "";
+  const tot = {};
+  d.ingredients.forEach(i => { if (i.opt) return; const v = volOz(i) * X.multOf(i); if (v > 0) tot[i.name] = (tot[i.name] || 0) + v; });
+  const shop = [];
+  Object.entries(tot).forEach(([n, oz]) => {
+    const sh = SHELF_OF[n];
+    if (n === "Lager Beer") shop.push([n, `${Math.ceil(oz / 12)} × 12 oz cans`]);
+    else if (n === "Stout") shop.push([n, `${Math.ceil(oz / 14.9)} × pint cans`]);
+    else if (BOOZE_SHELVES.has(sh) && oz >= .75) { const b = oz / 25.36; shop.push([n, `${qtr(b)} bottle${b > 1 ? "s" : ""} (750 ml)`]); }
+    else if (FIZZ.has(n) && oz >= 4) shop.push([n, `${frac(Math.ceil(oz / 33.8 * 2) / 2)} L`]);
+    else if (JUICE_FRUIT[n] && oz >= 2) { const [f, per] = JUICE_FRUIT[n], c = Math.ceil(oz / per); shop.push([n, `≈ ${c} ${f}${c > 1 ? "s" : ""}, juiced`]); }
+  });
+  let tip = "";
+  if (baseServes(d) === 1 && serves > 1) {
+    const hot = d.cat === "Hot" || ["hot", "irish"].includes(d.glass);
+    const egg = d.ingredients.some(i => !i.opt && (i.name === "Egg White" || i.name === "Whole Egg"));
+    if (egg) tip = "🥚 Egg drinks don't batch well. Mix everything else ahead, then shake each glass with its egg white to order.";
+    else if (d.method === "layer") tip = "🎨 Layered shots can't be pre-mixed. Line the glasses up and pour each layer assembly-line style.";
+    else if (hot) tip = "🔥 Make it in a pot or slow cooker on LOW and ladle to order. Don't let it boil.";
+    else if (d.method === "blend") tip = "🌀 Blend in rounds; most blenders handle about 4 drinks at a time.";
+    else {
+      const tops = d.ingredients.filter(i => i.top && !i.opt);
+      const base = d.ingredients.filter(i => !i.top && !i.opt && !i.side && i.unit !== "rinse").reduce((a, i) => a + volOz(i) * X.multOf(i), 0);
+      const water = Math.round(base * (DILUTION[d.method] || .1) * 4) / 4;
+      const fresh = d.ingredients.some(i => ["leaves", "slice", "wedge"].includes(i.unit));
+      tip = `🧊 Party move: stir everything${tops.length ? ` except the ${listJoin(tops.map(t => t.name))}` : ""} in a pitcher${water >= 1 ? ` with ${fmtAmt({ amt: water, unit: "oz" })} of cold water (that replaces the melt from ${/shake|dry|muddle/.test(d.method) ? "shaking" : "stirring"})` : ""}. Chill 2+ hours, then pour over ice${tops.length ? ` and top each glass with ${listJoin(tops.map(t => t.name))}` : ""}.${fresh ? " Muddle any herbs or fruit right in the pitcher." : ""}`;
+    }
+  }
+  return `${shop.length ? `<div class="shop"><b>🛒 Shopping math</b>${shop.map(([n, t]) => `<div class="row"><span>${esc(n)}</span><span>${esc(t)}</span></div>`).join("")}</div>` : ""}${tip ? `<div class="batch-tip">${esc(tip)}</div>` : ""}`;
+}
+function meterHTML(d, X) {
+  if (!d.alcoholic) return `<div class="meter zero"><div class="m-top"><span>🍃 Zero-proof</span><span>0% ABV</span></div><div class="m-bar"><i style="--p:0%"></i></div></div>`;
+  const st = strength(d, X.isDbl ? X.dbl : null);
+  const [lab, em] = strengthLabel(st.abv);
+  const p = Math.min(st.abv / 40, 1) * 100;
+  const std = st.std < .95 ? st.std.toFixed(1) : (Math.round(st.std * 10) / 10).toString();
+  return `<div class="meter"><div class="m-top"><span>${em} ${lab}</span><span>≈ ${Math.round(st.abv)}% ABV · ${std} std drink${st.std >= .95 && st.std < 1.05 ? "" : "s"}${baseServes(d) > 1 ? " per glass" : ""}</span></div>
+    <div class="m-bar"><i style="--p:${p.toFixed(1)}%"></i></div><div class="m-scale"><span>Light</span><span>Medium</span><span>Strong</span><span>🚀</span></div></div>`;
+}
+function updateDynamic() {
+  const d = BY_ID[openId]; if (!d) return; const X = detailCtx(d), have = cab();
+  const ib = $("#ingBox"); if (ib) ib.innerHTML = ingRowsHTML(d, have, X);
+  const bi = $("#batchInfo"); if (bi) bi.innerHTML = batchInfoHTML(d, X);
+  const sn = $("#servesN"); if (sn) sn.textContent = serves;
+}
 function renderDetail(anim) {
   const d = BY_ID[openId]; if (!d) { closeDrink(); return; }
   const have = cab(); const miss = missingFor(d, have);
   const steps = buildSteps(d);
-  const dbl = doubleSet(d), canDbl = dbl.size > 0, isDbl = canDbl && pour === "double";
-  const ingRows = d.ingredients.map(i => {
-    const always = ALWAYS.has(i.name), using = covers(i.name, have);
-    const cls = using ? (using === i.name || always ? "have" : "sub") : "miss";
-    const subNote = using && using !== i.name && !always ? `<small class="subnote">✓ Using your ${esc(using)}</small>` : "";
-    const x2 = isDbl && dbl.has(i);
-    return `<div class="ing-row" data-ing="${esc(i.name)}"><button class="dot ${cls}${i.opt ? " opt" : ""}" ${always ? "disabled" : ""} aria-label="Toggle in cabinet">✓</button>
-      <div class="ing-name"><b>${esc(ingLabel(i))}</b>${i.opt ? ' <small style="display:inline;color:var(--amber)">optional</small>' : ""}${i.note ? `<small>${esc(i.note)}</small>` : ""}${subNote}</div>
-      <div class="amt${x2 ? " dbl" : ""}">${esc(fmtAmt(i, x2 ? 2 : 1))}${x2 ? '<span class="x2">×2</span>' : ""}</div></div>`;
-  }).join("");
+  const X = detailCtx(d);
   const status = miss.length ? `<div class="status-line no">You're missing <b>${miss.length}</b>: ${esc(miss.join(", "))}</div>`
     : `<div class="status-line ok">✓ You've got everything — time to pour!</div>`;
-  const dblNames = [...dbl].map(i => i.name);
-  const pourBlock = canDbl ? `<div class="pour-row"><div class="seg" id="pourSeg"><button data-pour="single" class="${isDbl ? "" : "on"}">Single</button><button data-pour="double" class="${isDbl ? "on" : ""}">Double 💪</button></div></div>
-      ${isDbl ? `<div class="hint">Double = 2× the ${esc(listJoin(dblNames))}. Mixers & juices stay the same${UP_GLASSES.has(d.glass) || d.glass === "shot" ? " — you may want a bigger glass" : ""}.</div>` : ""}` : "";
+  const dblNames = [...X.dbl].map(i => i.name);
+  const bs = baseServes(d), maxS = Math.max(24, bs * 6);
+  const pourBlock = `<div class="pour-row">${X.canDbl ? `<div class="seg" id="pourSeg"><button data-pour="single" class="${X.isDbl ? "" : "on"}">Single</button><button data-pour="double" class="${X.isDbl ? "on" : ""}">Double 💪</button></div>` : "<span></span>"}
+      <button class="batch-btn${batchOn ? " on" : ""}" id="batchBtn">🎉 Party batch</button></div>
+      ${X.isDbl ? `<div class="hint">Double = 2× the ${esc(listJoin(dblNames))}. Mixers & juices stay the same${UP_GLASSES.has(d.glass) || d.glass === "shot" ? " — you may want a bigger glass" : ""}.</div>` : ""}
+      ${batchOn ? `<div class="batch-panel"><div class="bp-top"><span>Serves <b id="servesN">${serves}</b></span><small>${bs > 1 ? `recipe makes ${bs}` : "glasses"}</small></div>
+        <input type="range" id="servesR" min="${bs}" max="${maxS}" step="${bs}" value="${serves}">
+        <div class="bp-scale"><span>${bs}</span><span>${maxS}</span></div><div id="batchInfo">${batchInfoHTML(d, X)}</div></div>` : ""}`;
+  const fl = d.flavors.length ? `<div class="flav">${d.flavors.map(f => `<span class="tag">${FL_ICON[f]} ${f}</span>`).join("")}</div>` : "";
   $("#sheetInner").innerHTML = `
     <div class="grab"></div>
     <div class="sh-top"><button class="round-btn" id="shClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
@@ -553,25 +714,29 @@ function renderDetail(anim) {
       <div class="tap-hint">tap the glass for another drop</div>
       <h1>${esc(d.name)}</h1>
       <div class="facts">
-        <div class="fact"><small>Style</small><span>${esc(d.cat === "Geeky" ? "🎮 Geeky" : d.cat)}${d.custom ? " · ★ Mine" : ""}</span></div>
-        <div class="fact"><small>Base</small><span>${esc(baseLabel(d))}${!d.alcoholic && d.cat !== "Mocktail" ? " (opt.)" : ""}</span></div>
+        <div class="fact"><small>Style</small><span>${esc(d.cat === "Geeky" ? "🎮 Geeky" : d.cat === "Spooky" ? "🎃 Spooky" : d.cat)}${d.custom ? " · ★ Mine" : ""}</span></div>
+        <div class="fact"><small>Base</small><span>${esc(baseLabel(d))}${!d.alcoholic && d.cat !== "Mocktail" && d.base !== "None" ? " (opt.)" : ""}</span></div>
         <div class="fact"><small>Serve in</small><span>${esc(GLASS_LABEL[d.glass] || "Glass")}</span></div>
         <div class="fact"><small>Method</small><span>${esc(METHOD_NAME[d.method] || "Built")}</span></div>
       </div>
+      ${fl}
       ${d.desc ? `<p>${esc(d.desc)}</p>` : ""}</div>
     ${status}
+    <div class="sec-h"><h3>Strength</h3><small class="dim">estimate</small></div>
+    <div id="meterBox">${meterHTML(d, X)}</div>
     <div class="sec-h"><h3>Ingredients</h3></div>
     ${pourBlock}
-    <div class="ing" style="margin-top:${canDbl ? 10 : 0}px">${ingRows}</div>
+    <div class="ing" id="ingBox" style="margin-top:10px">${ingRowsHTML(d, have, X)}</div>
     <div class="hint">Tap a circle to add/remove that ingredient from your Liquor Cabinet.</div>
     <div class="sec-h"><h3>How to make it</h3><button class="link" id="resetSteps">Reset</button></div>
     <div class="steps">${steps.map((s, k) => `<div class="step" data-k="${k}"><div class="n">${k + 1}</div><div class="t">${esc(s)}</div></div>`).join("")}</div>
     ${d.garnish && !/^none$/i.test(d.garnish) ? `<div class="sec-h"><h3>Garnish</h3></div><div class="garnish"><span class="gi">🍒</span><span>${esc(d.garnish)}</span></div>` : ""}
     <div class="detail-actions">
-      ${d.custom ? `<button class="pill-btn primary" id="editBtn">✎ Edit recipe</button>` : ""}
+      <button class="pill-btn primary" id="shareBtn">📸 Share card</button>
+      ${d.custom ? `<button class="pill-btn" id="editBtn">✎ Edit recipe</button>` : ""}
       <button class="pill-btn" id="remixBtn">✚ Remix as my own</button>
     </div>
-    <p class="about" style="margin-top:18px">Tap a step to check it off. Sip slowly, tip your bartender (you).</p>`;
+    <p class="about" style="margin-top:18px">Tap a step to check it off. Sip slowly, tip your bartender (you).<br>Strength is an estimate (1 US standard drink = 0.6 oz of pure alcohol).</p>`;
   syncUnits();
 }
 $("#sheetInner").addEventListener("click", e => {
@@ -588,6 +753,13 @@ $("#sheetInner").addEventListener("click", e => {
     else sfx("tick");
     rerenderDetail(); return;
   }
+  if (e.target.closest("#batchBtn")) {
+    batchOn = !batchOn; const d = BY_ID[openId];
+    if (batchOn) { if (serves <= baseServes(d)) serves = baseServes(d) > 1 ? baseServes(d) * 2 : 6; sfx("glug"); const r = e.target.getBoundingClientRect(); sparkle(r.left + r.width / 2, r.top + r.height / 2, 22, ["#f2a541", "#ff6aa0", "#7ad0ff", "#fff2d8"]); toast("Party mode! 🎉 Drag to set the headcount"); }
+    else { serves = baseServes(d); sfx("tick"); }
+    rerenderDetail(); return;
+  }
+  if (e.target.closest("#shareBtn")) { shareCard(BY_ID[openId]); return; }
   if (e.target.closest("#editBtn")) { const c = S.custom.find(x => x.id === openId); if (c) openBuilder(JSON.parse(JSON.stringify(c))); return; }
   if (e.target.closest("#remixBtn")) { openBuilder(fromDrink(BY_ID[openId])); return; }
   const dot = e.target.closest(".dot"); if (dot && !dot.disabled) {
@@ -601,6 +773,12 @@ $("#sheetInner").addEventListener("click", e => {
   if (e.target.closest("#resetSteps")) { $$("#sheetInner .step").forEach(x => x.classList.remove("done")); sfx("tick"); }
 });
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeDrink(); });
+let lastTickV = 0;
+$("#sheetInner").addEventListener("input", e => {
+  if (e.target.id !== "servesR") return;
+  serves = +e.target.value; updateDynamic();
+  const now = Date.now(); if (now - lastTickV > 60) { sfx("tick"); lastTickV = now; }
+});
 function swipeClose(inner, fn) {
   let y0 = null;
   inner.addEventListener("touchstart", e => { y0 = inner.scrollTop <= 0 && !e.target.closest("input,textarea,select") ? e.touches[0].clientY : null; }, { passive: true });
@@ -608,6 +786,104 @@ function swipeClose(inner, fn) {
   inner.addEventListener("touchend", e => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; inner.style.transform = ""; y0 = null; if (dy > 120) fn(); });
 }
 swipeClose($("#sheetInner"), () => closeDrink());
+
+// ───────────────────────── SHARE CARD ─────────────────────────
+const F_SERIF = 'Georgia, "Times New Roman", serif', F_SANS = '-apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif',
+  F_SCRIPT = '"Snell Roundhand", "Apple Chancery", "Brush Script MT", "Segoe Script", cursive';
+function svgToImg(svg, w, h) {
+  return new Promise(res => {
+    const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null);
+    im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg.replace("<svg ", `<svg width="${w}" height="${h}" `));
+  });
+}
+function wrapLines(ctx, text, maxW) {
+  const words = String(text).split(/\s+/), lines = []; let cur = "";
+  for (const w of words) { const t = cur ? cur + " " + w : w; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur); return lines;
+}
+function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function drawCard(ctx, d, img, H) {
+  const W = 1080, P = 84, X = detailCtx(d), real = H > 0;
+  let y = 0;
+  if (real) {
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#26180e"); bg.addColorStop(.45, "#170f09"); bg.addColorStop(1, "#0e0805");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    const gl = ctx.createRadialGradient(W / 2, 330, 10, W / 2, 330, 420); gl.addColorStop(0, d.color + "66"); gl.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = gl; ctx.fillRect(0, 0, W, 800);
+    ctx.strokeStyle = "rgba(242,165,65,.35)"; ctx.lineWidth = 3; rrect(ctx, 28, 28, W - 56, H - 56, 36); ctx.stroke();
+    ctx.strokeStyle = "rgba(242,165,65,.12)"; ctx.lineWidth = 1.5; rrect(ctx, 42, 42, W - 84, H - 84, 28); ctx.stroke();
+  }
+  const T = (txt, x, yy, font, color, align = "center") => { ctx.font = font; if (real) { ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(txt, x, yy); } };
+  ctx.textBaseline = "alphabetic";
+  y = 128; T("Garnish", W / 2, y, `56px ${F_SCRIPT}`, "#f2a541");
+  y += 38; T("T H E   H O M E   B A R", W / 2, y, `600 20px ${F_SANS}`, "#7d6754");
+  y += 24;
+  if (img && real) ctx.drawImage(img, W / 2 - 170, y, 340, 408);
+  y += 408 + 30;
+  ctx.font = `bold 78px ${F_SERIF}`;
+  for (const ln of wrapLines(ctx, d.name, W - 2 * P)) { y += 80; T(ln, W / 2, y, `bold 78px ${F_SERIF}`, "#fbe7c9"); }
+  y += 54; T(`${d.cat === "Spooky" ? "🎃 Spooky" : d.cat === "Geeky" ? "🎮 Geeky" : d.cat}  ·  ${baseLabel(d)}  ·  ${GLASS_LABEL[d.glass] || "Glass"}`, W / 2, y, `30px ${F_SANS}`, "#c9ad8c");
+  const st = strength(d, X.isDbl ? X.dbl : null), [lab, em] = strengthLabel(d.alcoholic ? st.abv : 0);
+  const pills = [d.alcoholic ? `${em} ${lab} · ≈${Math.round(st.abv)}% ABV` : "🍃 Zero-proof"];
+  if (X.isDbl) pills.push("💪 Double");
+  if (batchOn && serves > baseServes(d)) pills.push(`🎉 Serves ${serves}`);
+  else if (baseServes(d) > 1) pills.push(`Serves ${baseServes(d)}`);
+  y += 56; T(pills.join("   •   "), W / 2, y, `600 30px ${F_SANS}`, "#f2a541");
+  if (d.flavors.length) { y += 48; T(d.flavors.map(f => `${FL_ICON[f]} ${f}`).join("   "), W / 2, y, `28px ${F_SANS}`, "#e2cdb0"); }
+  if (d.desc) { ctx.font = `italic 30px ${F_SERIF}`; y += 20; for (const ln of wrapLines(ctx, d.desc, W - 2 * P - 40)) { y += 42; T(ln, W / 2, y, `italic 30px ${F_SERIF}`, "#a68e74"); } }
+  const section = name => { y += 74; T(name, P, y, `700 24px ${F_SANS}`, "#8a7258", "left"); if (real) { ctx.fillStyle = "rgba(242,165,65,.25)"; ctx.fillRect(P, y + 16, W - 2 * P, 2); } y += 18; };
+  section("I N G R E D I E N T S");
+  d.ingredients.forEach(i => {
+    y += 62; const amt = fmtAmt(i, X.multOf(i));
+    T(ingLabel(i) + (i.opt ? " (optional)" : ""), P + 8, y, `600 36px ${F_SANS}`, "#f3e2c8", "left");
+    T(amt, W - P - 8, y, `bold 36px ${F_SANS}`, "#f2a541", "right");
+    if (i.note) { y += 36; ctx.font = `26px ${F_SANS}`; const n = wrapLines(ctx, i.note, W - 2 * P - 260)[0]; T(n, P + 8, y, `26px ${F_SANS}`, "#8a7258", "left"); }
+  });
+  section("H O W   T O   M A K E   I T");
+  buildSteps(d).forEach((s, k) => {
+    ctx.font = `31px ${F_SANS}`; const lines = wrapLines(ctx, s, W - 2 * P - 78);
+    y += 30;
+    if (real) { ctx.fillStyle = "#e8913a"; ctx.beginPath(); ctx.arc(P + 22, y + 18, 22, 0, 6.283); ctx.fill(); }
+    T(String(k + 1), P + 22, y + 28, `bold 24px ${F_SANS}`, "#2a1508");
+    lines.forEach((ln, j) => { T(ln, P + 70, y + 30 + j * 42, `31px ${F_SANS}`, "#ead8bf", "left"); });
+    y += 30 + (lines.length - 1) * 42 + 12;
+  });
+  if (d.garnish && !/^none$/i.test(d.garnish)) {
+    y += 40; ctx.font = `italic 31px ${F_SERIF}`;
+    wrapLines(ctx, "🍒  Garnish: " + d.garnish, W - 2 * P).forEach((ln, j) => { y += j ? 42 : 0; T(ln, W / 2, y + 20, `italic 31px ${F_SERIF}`, "#f2d3a8"); });
+    y += 20;
+  }
+  y += 70; if (real) { ctx.fillStyle = "rgba(242,165,65,.2)"; ctx.fillRect(W / 2 - 160, y - 34, 320, 2); }
+  T("Poured with Garnish 🍸", W / 2, y + 10, `600 26px ${F_SANS}`, "#8a7258");
+  return y + 90;
+}
+let shareFile = null, shareURL = null;
+async function shareCard(d) {
+  sfx("pop"); toast("Plating your card… 📸");
+  const img = await svgToImg(glassSVG(d), 340, 408);
+  const cv = document.createElement("canvas"); cv.width = 1080; cv.height = 10;
+  const H = drawCard(cv.getContext("2d"), d, img, 0);
+  cv.height = Math.ceil(H);
+  drawCard(cv.getContext("2d"), d, img, cv.height);
+  cv.toBlob(blob => {
+    if (!blob) { toast("Couldn't make the card, sorry!"); return; }
+    if (shareURL) URL.revokeObjectURL(shareURL);
+    shareURL = URL.createObjectURL(blob);
+    shareFile = new File([blob], `${slug(d.name)}-garnish.png`, { type: "image/png" });
+    $("#soImg").src = shareURL; $("#soSave").href = shareURL; $("#soSave").download = shareFile.name;
+    const can = !!(navigator.canShare && navigator.canShare({ files: [shareFile] }));
+    $("#soShare").classList.toggle("hidden", !can);
+    $("#soTitle").textContent = d.name;
+    $("#shareOv").classList.add("on"); sfx("clink");
+  }, "image/png");
+}
+$("#soShare").onclick = async () => {
+  if (!shareFile) return;
+  try { await navigator.share({ files: [shareFile], title: $("#soTitle").textContent, text: `${$("#soTitle").textContent} — poured with Garnish 🍸` }); sfx("tada"); }
+  catch (e) { if (e && e.name !== "AbortError") toast("Sharing didn't work — long-press the image to save it."); }
+};
+$("#soClose").onclick = () => { $("#shareOv").classList.remove("on"); sfx("thunk"); };
+$("#shareOv").addEventListener("click", e => { if (e.target.id === "shareOv") $("#shareOv").classList.remove("on"); });
 
 // ───────────────────────── RECIPE BUILDER ─────────────────────────
 const UNITS = ["oz", "ml", "dash", "drop", "barspoon", "tsp", "tbsp", "cup", "splash", "rinse", "top", "slice", "wedge", "whole", "leaves", "scoop", "pinch", "cube"];
@@ -907,7 +1183,7 @@ $("#importFile").onchange = e => {
   rd.readAsText(f);
 };
 $("#resetBtn").onclick = () => { if (!confirm("Empty your Liquor Cabinet and clear all favorites? (Your own recipes stay.)")) return; S.cab = []; S.fav = []; S.pick = []; save(); sfx("thunk"); toast("Bar wiped clean. Last call!"); refreshCurrent(); };
-function renderAbout() { $("#about").innerHTML = `Garnish v2.1 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
+function renderAbout() { $("#about").innerHTML = `Garnish v2.2 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
 
 // ───────────────────────── Navigation ─────────────────────────
 let current = "menu";
