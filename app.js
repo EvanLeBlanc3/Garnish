@@ -334,6 +334,17 @@ const SFX = {
   clink() { const t = AC.currentTime; [[2637, .14], [3951, .07], [5274, .04]].forEach(([f, v]) => { tone(f, t, 0.9, v); tone(f * 0.985, t + 0.11, 0.8, v * .8); }); noise(t, 0.02, 0.15, "highpass", 5000); },
   pour() { const t = AC.currentTime; const f = noise(t, 0.75, 0.22, "bandpass", 500, 4); f.frequency.setValueAtTime(400, t);
     for (let k = 0; k < 8; k++) f.frequency.linearRampToValueAtTime(400 + Math.random() * 700, t + k * 0.09); tone(220, t + .05, .15, .03, "sine", 520); },
+  drop() { // liquid "plip": fast upward pitch sweep + tiny echo drop + soft splash
+    const t = AC.currentTime, c = AC;
+    const plip = (st, f0, f1, vol, dur) => { const o = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+      o.type = "sine"; o.frequency.setValueAtTime(f0, st); o.frequency.exponentialRampToValueAtTime(f1, st + dur * 0.6);
+      lp.type = "lowpass"; lp.frequency.value = 2600;
+      g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(vol, st + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+      o.connect(lp).connect(g).connect(c.destination); o.start(st); o.stop(st + dur + 0.02); };
+    plip(t, 420, 1500, 0.28, 0.11);
+    plip(t + 0.13, 650, 1900, 0.09, 0.07);
+    noise(t + 0.01, 0.05, 0.035, "bandpass", 1800, 4);
+  },
   glug() { const t = AC.currentTime; for (let k = 0; k < 4; k++) { tone(180 + k * 25, t + k * 0.11, 0.09, 0.14, "sine", 90); noise(t + k * 0.11, 0.06, 0.12, "bandpass", 600, 3); } },
   pop() { const t = AC.currentTime; tone(520, t, 0.09, 0.22, "sine", 110); noise(t, 0.04, 0.2, "bandpass", 1200, 1.5); },
   thunk() { const t = AC.currentTime; tone(170, t, 0.14, 0.18, "sine", 70); },
@@ -466,7 +477,7 @@ function openDrink(id) {
   const d = BY_ID[id]; if (!d) return; openId = id; pour = "single";
   renderDetail(true);
   $("#sheet").classList.add("open"); $("#sheet").setAttribute("aria-hidden", "false");
-  $("#sheetInner").scrollTop = 0; sfx("pour");
+  $("#sheetInner").scrollTop = 0; sfx("drop");
   if (!(history.state && history.state.d)) history.pushState({ d: id }, "");
 }
 function closeDrink(fromPop) {
