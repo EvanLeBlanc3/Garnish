@@ -1,10 +1,10 @@
 :root{
-  /* +14px nudge keeps the header clear of the Dynamic Island */
+  /* +24px nudge keeps the header clear of the Dynamic Island */
   --bg:#120c08; --bg2:#1a120c; --panel:#211710; --panel2:#2b1e15; --wood:#3a2618;
   --line:rgba(255,200,140,.12); --line2:rgba(255,200,140,.22);
   --text:#f3e6d3; --muted:#b39a80; --dim:#7d6754;
   --amber:#f2a541; --orange:#e8742a; --copper:#c8743a; --ok:#9ccc6a; --miss:#e0703a; --red:#d9473a;
-  --safe-t:calc(env(safe-area-inset-top,0px) + 14px); --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:calc(env(safe-area-inset-top,0px) + 24px); --safe-b:env(safe-area-inset-bottom,0px);
   --serif:"Iowan Old Style","Palatino","Georgia",serif;
   --script:"Snell Roundhand","Apple Chancery","Brush Script MT","Segoe Script",cursive;
 }
@@ -291,4 +291,4 @@ body.nofx .gl .bub,body.nofx .gl .steam{animation:none;opacity:0}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 /* Installed home-screen app: guarantee room under the Dynamic Island even if iOS reports 0 */
-@media (display-mode: standalone){:root{--safe-t:calc(max(env(safe-area-inset-top,0px),54px) + 14px)}}
+@media (display-mode: standalone){:root{--safe-t:calc(max(env(safe-area-inset-top,0px),54px) + 24px)}}
