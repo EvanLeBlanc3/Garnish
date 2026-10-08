@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <canvas id="bokeh" aria-hidden="true"></canvas>
@@ -30,7 +30,6 @@
 </header>
 
 <main id="app">
-  <!-- MENU -->
   <section class="view active" id="view-menu">
     <div class="search-row">
       <div class="search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
@@ -46,7 +45,6 @@
     <div class="cards" id="menuList"></div>
   </section>
 
-  <!-- MIX -->
   <section class="view" id="view-mix">
     <h2 class="view-title">What can I make?</h2>
     <div class="seg wide" id="mixMode">
@@ -62,7 +60,6 @@
     <div id="mixResults"></div>
   </section>
 
-  <!-- CABINET -->
   <section class="view" id="view-cab">
     <h2 class="view-title">Liquor Cabinet</h2>
     <div class="cab-stats" id="cabStats"></div>
@@ -75,7 +72,6 @@
     <div id="cabList"></div>
   </section>
 
-  <!-- FAVORITES -->
   <section class="view" id="view-fav">
     <h2 class="view-title">Favorites</h2>
     <div class="cards" id="favList"></div>
@@ -83,7 +79,6 @@
     <div class="cards" id="mineList"></div>
   </section>
 
-  <!-- SETTINGS -->
   <section class="view" id="view-more">
     <h2 class="view-title">Back Office</h2>
     <div class="panel">
@@ -93,6 +88,8 @@
         <button class="switch" id="sndSwitch" role="switch"></button></div>
       <div class="set-row"><div><b>Screen effects</b><small>Candlelight, floating bokeh, glass animations &amp; sparkles</small></div>
         <button class="switch" id="fxSwitch" role="switch"></button></div>
+      <div class="set-row"><div><b>Bartender Mode voice</b><small>Read each step out loud</small></div>
+        <button class="switch" id="voiceSwitch" role="switch"></button></div>
     </div>
     <div class="panel">
       <div class="set-row col"><div><b>Backup</b><small>Your cabinet, favorites &amp; custom recipes live on this phone. Export a backup so clearing Safari data never wipes your bar.</small></div>
@@ -117,6 +114,25 @@
 <div class="sheet" id="builder" aria-hidden="true"><div class="sheet-inner" id="builderInner"></div></div>
 <datalist id="ingList"></datalist>
 
+<!-- Bartender Mode -->
+<div class="bm" id="bm" aria-hidden="true">
+  <div class="bm-top">
+    <button class="round-btn" id="bmClose" aria-label="Exit Bartender Mode"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <div class="bm-title"><b id="bmName"></b><small id="bmSub"></small></div>
+    <div class="bm-tools">
+      <button class="round-btn sm" id="bmVoice" aria-label="Read aloud">🔇</button>
+      <button class="round-btn sm" id="bmSize" aria-label="Text size">Aa</button>
+    </div>
+  </div>
+  <div class="bm-prog" id="bmProg"></div>
+  <div class="bm-stage" id="bmStage"></div>
+  <div class="bm-nav">
+    <button class="bm-btn ghost" id="bmPrev">‹ Back</button>
+    <button class="bm-btn" id="bmNext">Next ›</button>
+  </div>
+  <div class="bm-awake" id="bmAwake"></div>
+</div>
+
 <div class="roulette" id="roulette"><div class="rl-glass" id="rlGlass"></div><div class="rl-name" id="rlName"></div><div class="rl-sub">The bartender is choosing…</div></div>
 
 <div class="shareov" id="shareOv"><div class="so-inner">
@@ -130,7 +146,7 @@
 
 <div class="rotate-lock"><div class="rl-inner"><div class="rl-ico">🍸</div><b>Whoa there, tilt it back.</b><span>Garnish only pours in portrait.</span></div></div>
 
-<script src="drinks.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="drinks.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

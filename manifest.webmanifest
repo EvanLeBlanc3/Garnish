@@ -1,7 +1,7 @@
 {
   "name": "Garnish",
   "short_name": "Garnish",
-  "description": "Your pocket bartender: 200+ cocktails & mocktails, a Liquor Cabinet, your own recipes, and a what-can-I-make matchmaker.",
+  "description": "Your pocket bartender: 200+ cocktails & mocktails, Bartender Mode, a Liquor Cabinet, your own recipes, and a what-can-I-make matchmaker.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,4 +1,4 @@
-/* Garnish — the home bar app (v6) */
+/* Garnish — the home bar app (v8) */
 (() => {
 'use strict';
 
@@ -9,7 +9,7 @@ const BASE_SHELVES = [
  ["Wine, Vermouth & Beer","🍷",["Sweet Vermouth","Dry Vermouth","Lillet Blanc","Dry Sherry","Sparkling Wine","Red Wine","White Wine","Rosé Wine","Lager Beer","Stout"]],
  ["Mixers & Sodas","🫧",["Club Soda","Tonic Water","Ginger Beer","Ginger Ale","Cola","Lemon-Lime Soda","Grapefruit Soda","Cream Soda","Root Beer","Energy Drink","Lemonade","Iced Tea","Espresso","Coffee","Hot Chocolate"]],
  ["Juices & Purées","🍊",["Lemon Juice","Lime Juice","Orange Juice","Grapefruit Juice","Pineapple Juice","Cranberry Juice","Cran-Apple Juice","Pomegranate Juice","Tomato Juice","Clamato","Apple Cider","Pear Nectar","Peach Purée","Passion Fruit Purée","Coconut Cream","Pickle Brine","Olive Brine"]],
- ["Syrups & Sweeteners","🍯",["Simple Syrup","Demerara Syrup","Honey Syrup","Honey-Ginger Syrup","Agave Syrup","Grenadine","Orgeat","Cinnamon Syrup","Lavender Syrup","Vanilla Syrup","Raspberry Syrup","Chocolate Syrup","Butterscotch Syrup","Maple Syrup","Pumpkin Spice Syrup","Sour Mix","Sugar","Sugar Cube","Brown Sugar","Orange Marmalade"]],
+ ["Syrups & Sweeteners","🍯",["Simple Syrup","Demerara Syrup","Honey Syrup","Honey-Ginger Syrup","Agave Syrup","Maple Syrup","Grenadine","Orgeat","Cinnamon Syrup","Lavender Syrup","Vanilla Syrup","Raspberry Syrup","Pumpkin Spice Syrup","Chocolate Syrup","Butterscotch Syrup","Sour Mix","Sugar","Sugar Cube","Brown Sugar","Orange Marmalade"]],
  ["Bitters & Aromatics","💧",["Angostura Bitters","Orange Bitters","Peychaud's Bitters","Orange Flower Water"]],
  ["Dairy & Eggs","🥚",["Egg White","Whole Egg","Heavy Cream","Half & Half","Milk","Butter","Vanilla Ice Cream","Lime Sherbet"]],
  ["Fresh Produce","🍋",["Lemon","Lime","Orange","Apple","Peach","Banana","Strawberries","Cucumber","Jalapeño","Mint Leaves"]],
@@ -40,35 +40,20 @@ const GLASS_LABEL = Object.fromEntries(Object.entries(GLASS_WORD).map(([k, v]) =
 const UP_GLASSES = new Set(["martini","coupe","flute","margarita"]);
 const METHOD_NAME = {shake:"Shaken & strained",shakeR:"Shaken, on the rocks",dry:"Dry shaken (egg white)",stir:"Stirred & strained",stirR:"Stirred, on the rocks",
  build:"Built in the glass",muddle:"Muddled & shaken",blend:"Blended",layer:"Layered",custom:"Bartender's method"};
+const catLabel = c => c === "Geeky" ? "🎮 Geeky" : c === "Spooky" ? "🎃 Spooky" : c === "Mocktail" ? "Mocktails" : c;
 
 // ───────────────────────── State ─────────────────────────
 const KEY = "garnish.v1";
-const S = Object.assign({ cab: [], fav: [], units: "oz", sound: true, fx: true, pick: [], custom: [] }, safeLoad());
+const S = Object.assign({ cab: [], fav: [], units: "oz", sound: true, fx: true, pick: [], custom: [], voice: false, bmSize: 1 }, safeLoad());
 if (!Array.isArray(S.custom)) S.custom = [];
 delete S.closedShelves;
 function safeLoad() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Couldn't save — storage full?"); } }
 
-// ───────────────────────── Drinks ─────────────────────────
 const slug = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const norm = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 let SHELF_OF = {}, SHELVES = [];
-function parseDrink(r, customId) {
-  const [name, cat, glass, method, color, base, desc, ings, garnish, ex = {}] = r;
-  const ingredients = ings.map(s => {
-    const [a, unit, nm, flags = "", note = ""] = s.split("|");
-    const f = new Set(flags.split(",").filter(Boolean));
-    const amt = a === "" ? null : parseFloat(a);
-    return { amt: isNaN(amt) ? null : amt, unit, name: nm, note, opt: f.has("opt"), top: f.has("top"),
-      float: f.has("float"), side: f.has("side"), foam: f.has("foam"), inGlass: f.has("glass") };
-  }).filter(i => i.name);
-  const required = [...new Set(ingredients.filter(i => !i.opt && !ALWAYS.has(i.name)).map(i => i.name))];
-  const alcoholic = ingredients.some(i => !i.opt && BOOZE_SHELVES.has(SHELF_BASE_OF[i.name])) || (!!customId && base !== "None");
-  const d = { id: customId || slug(name), name, cat, glass, method, color, base, desc, ingredients, garnish, ex, required, alcoholic, custom: !!customId };
-  d.flavors = flavorsOf(d); d.abv = strength(d).abv;
-  d.search = norm(d.flavors.join(" ") + " " + name + " " + ingredients.map(i => i.name + " " + i.note).join(" ") + " " + cat + " " + base + (customId ? " mine my recipe custom" : ""));
-  return d;
-}
+
 // ───────────────────────── Strength & flavor analysis ─────────────────────────
 const ABV = {
   "Overproof Rum":75,"Absinthe":60,"Islay Scotch":46,"Green Chartreuse":55,"Yellow Chartreuse":40,"Triple Sec":40,"Grand Marnier":40,
@@ -89,7 +74,6 @@ function volOz(i) {
   return (VOL_UNIT[i.unit] || 0) * i.amt;
 }
 const DILUTION = { shake: .25, shakeR: .2, dry: .25, muddle: .25, stir: .2, stirR: .15, build: .1, blend: .35, layer: 0, custom: .12 };
-// per-glass strength; mult = how many times the spirits are multiplied (Double = 2)
 function strength(d, dblSet) {
   let alc = 0, tot = 0;
   d.ingredients.forEach(i => {
@@ -100,8 +84,7 @@ function strength(d, dblSet) {
   const hot = d.cat === "Hot" || ["hot", "irish"].includes(d.glass);
   tot *= 1 + (hot ? 0 : (DILUTION[d.method] || .1));
   const serves = (d.ex && d.ex.serves) || 1;
-  const abv = tot ? alc / tot * 100 : 0;
-  return { abv, std: alc / serves / 0.6 };
+  return { abv: tot ? alc / tot * 100 : 0, std: alc / serves / 0.6 };
 }
 function strengthLabel(a) {
   if (a < 0.5) return ["Zero-proof", "🍃"]; if (a < 8) return ["Light", "🪶"]; if (a < 15) return ["Easy-going", "🙂"];
@@ -130,9 +113,8 @@ function flavorsOf(d) {
     else if (n === "Cranberry Juice" || n === "Pomegranate Juice") sour += v * .3;
     else if ((n === "Lime" || n === "Lemon") && i.unit !== "slice") sour += (i.unit === "whole" ? 1 : .3) * (i.amt || 1);
     if (SYRUPS.has(n)) sweet += v;
-    else if (n === "Sugar") sweet += (i.unit === "cup" ? 8 : .35) * (i.amt || 0);
+    else if (n === "Sugar" || n === "Brown Sugar") sweet += (i.unit === "cup" ? 8 : .35) * (i.amt || 0);
     else if (n === "Sugar Cube") sweet += .25 * (i.amt || 1);
-    else if (n === "Brown Sugar") sweet += (i.unit === "cup" ? 8 : .35) * (i.amt || 0);
     else if (SHELF_BASE_OF[n] === "Liqueurs & Amari" && !BITTER.has(n)) sweet += v * .7;
     else if (SWEET_SODA.has(n)) sweet += v * .25;
     else if (SWEET_JUICE.has(n)) sweet += v * .2;
@@ -157,6 +139,23 @@ function flavorsOf(d) {
   return FLAVORS.map(x => x[0]).filter(x => f.has(x));
 }
 
+// ───────────────────────── Drinks ─────────────────────────
+function parseDrink(r, customId) {
+  const [name, cat, glass, method, color, base, desc, ings, garnish, ex = {}] = r;
+  const ingredients = ings.map(s => {
+    const [a, unit, nm, flags = "", note = ""] = s.split("|");
+    const f = new Set(flags.split(",").filter(Boolean));
+    const amt = a === "" ? null : parseFloat(a);
+    return { amt: isNaN(amt) ? null : amt, unit, name: nm, note, opt: f.has("opt"), top: f.has("top"),
+      float: f.has("float"), side: f.has("side"), foam: f.has("foam"), inGlass: f.has("glass") };
+  }).filter(i => i.name);
+  const required = [...new Set(ingredients.filter(i => !i.opt && !ALWAYS.has(i.name)).map(i => i.name))];
+  const alcoholic = ingredients.some(i => !i.opt && BOOZE_SHELVES.has(SHELF_BASE_OF[i.name])) || (!!customId && base !== "None");
+  const d = { id: customId || slug(name), name, cat, glass, method, color, base, desc, ingredients, garnish, ex, required, alcoholic, custom: !!customId };
+  d.flavors = flavorsOf(d); d.abv = strength(d).abv;
+  d.search = norm(d.flavors.join(" ") + " " + name + " " + ingredients.map(i => i.name + " " + i.note).join(" ") + " " + cat + " " + base + (customId ? " mine my recipe custom" : ""));
+  return d;
+}
 const BUILTIN = window.DRINKS.map(r => parseDrink(r));
 const clean = s => String(s == null ? "" : s).replace(/\|/g, "/");
 function customToTuple(c) {
@@ -363,7 +362,6 @@ function garnishSVG(d, G) {
   if (/strawberr|raspberr|blackberr|berr/.test(t)) s += `<g transform="translate(${rx - 6},${ry - 2})"><path d="M-6 -2 Q0 12 6 -2 Q0 -6 -6 -2 Z" fill="${/black/.test(t) ? "#3a1030" : "#d8283a"}"/><path d="M-4 -4 l4 -4 l4 4" fill="#4fa84a"/></g>`;
   return s;
 }
-// drop + ripple + splash pieces for the hero glass (surface at y = top)
 function dropFX(c, top, clipId) {
   const drop = `<g class="dropfall" style="--dy:${top + 4}px"><path d="M50 -16 Q46.4 -9.5 46.4 -6.6 A3.6 3.6 0 0 0 53.6 -6.6 Q53.6 -9.5 50 -16 Z" fill="${shade(c, .2)}" stroke="rgba(255,255,255,.65)" stroke-width=".7"/><ellipse cx="48.8" cy="-7.5" rx=".9" ry="1.4" fill="rgba(255,255,255,.8)"/></g>`;
   const rings = `<g ${clipId ? `clip-path="url(#${clipId})"` : ""}><ellipse class="ring" cx="50" cy="${top + .5}" rx="3" ry=".9" fill="none" stroke="rgba(255,255,255,.85)" stroke-width=".5"/><ellipse class="ring r2" cx="50" cy="${top + .5}" rx="3" ry=".9" fill="none" stroke="rgba(255,255,255,.6)" stroke-width=".4"/></g>`;
@@ -407,12 +405,10 @@ function glassSVG(d, opts = {}) {
     body += `<path d="${G.b}" fill="rgba(255,240,220,.06)"/>`;
     body += `<g clip-path="url(#${id}c)">`;
     if (hero) {
-      // wavy liquid surface that sloshes when it lands
       const wl = 20, amp = 1.6;
       let wave = `M-60 ${top}`; for (let x = -60; x < 170; x += wl) wave += ` q${wl / 4} ${-amp} ${wl / 2} 0 t${wl / 2} 0`;
       const line = wave;
       wave += ` L170 130 L-60 130 Z`;
-      // keep liquid inside the inner liquid shape horizontally (thin wall look) using a second clip
       defs += `<clipPath id="${id}i"><path d="${G.l}"/><rect x="0" y="${top - 6}" width="100" height="10"/></clipPath>`;
       body += `<g clip-path="url(#${id}i)"><g class="slosh${an ? " go" : ""}" style="transform-origin:50px ${top + 25}px"><g class="liq">
         <path class="wave" d="${wave}" fill="url(#${id}l)"/>
@@ -464,7 +460,7 @@ const SFX = {
   clink() { const t = AC.currentTime; [[2637, .14], [3951, .07], [5274, .04]].forEach(([f, v]) => { tone(f, t, 0.9, v); tone(f * 0.985, t + 0.11, 0.8, v * .8); }); noise(t, 0.02, 0.15, "highpass", 5000); },
   pour() { const t = AC.currentTime; const f = noise(t, 0.75, 0.22, "bandpass", 500, 4); f.frequency.setValueAtTime(400, t);
     for (let k = 0; k < 8; k++) f.frequency.linearRampToValueAtTime(400 + Math.random() * 700, t + k * 0.09); tone(220, t + .05, .15, .03, "sine", 520); },
-  drop() { // liquid "plip": fast upward pitch sweep + tiny echo drop + soft splash
+  drop() {
     const t = AC.currentTime, c = AC;
     const plip = (st, f0, f1, vol, dur) => { const o = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
       o.type = "sine"; o.frequency.setValueAtTime(f0, st); o.frequency.exponentialRampToValueAtTime(f1, st + dur * 0.6);
@@ -480,7 +476,10 @@ const SFX = {
   thunk() { const t = AC.currentTime; tone(170, t, 0.14, 0.18, "sine", 70); },
   fizz() { const t = AC.currentTime; for (let k = 0; k < 18; k++) noise(t + Math.random() * 0.5, 0.015, 0.06 + Math.random() * .05, "highpass", 4000 + Math.random() * 3000); },
   shake() { const t = AC.currentTime; for (let k = 0; k < 14; k++) { noise(t + k * 0.1, 0.06, 0.2, "bandpass", 2200 + (k % 2) * 900, 2); noise(t + k * 0.1 + .03, 0.03, 0.12, "highpass", 5000); } },
+  stir() { const t = AC.currentTime; for (let k = 0; k < 6; k++) { tone(3100 + (k % 3) * 400, t + k * 0.22, 0.12, 0.025); noise(t + k * 0.22, 0.05, 0.05, "bandpass", 2600, 3); } },
   ding() { const t = AC.currentTime; tone(1320, t, 0.35, 0.07); tone(1980, t + .06, 0.35, 0.05); },
+  bell() { const t = AC.currentTime; [0, .35, .7].forEach(o => { tone(1568, t + o, 0.6, 0.12); tone(2349, t + o, 0.5, 0.05); }); },
+  swoosh() { const t = AC.currentTime; const f = noise(t, 0.22, 0.12, "bandpass", 900, 1.2); f.frequency.exponentialRampToValueAtTime(3200, t + 0.2); },
   tada() { const t = AC.currentTime; [784, 988, 1175, 1568].forEach((f, k) => tone(f, t + k * 0.07, 0.4, 0.07, "triangle")); }
 };
 function sfx(name) { if (!S.sound) return; if (!ac()) return; try { SFX[name](); } catch (e) {} }
@@ -503,7 +502,7 @@ function ripple(e) {
   r.style.left = e.clientX + "px"; r.style.top = e.clientY + "px"; r.style.width = r.style.height = "160px"; fx.appendChild(r);
   setTimeout(() => r.remove(), 520);
 }
-document.addEventListener("pointerdown", e => { if (e.target.closest("button,.card,.bottle,.chip,.step,label,.shelf-h")) ripple(e); }, { passive: true });
+document.addEventListener("pointerdown", e => { if (e.target.closest("button,.card,.bottle,.chip,.step,label,.shelf-h,.bm-li")) ripple(e); }, { passive: true });
 
 (function bokeh() {
   const cv = $("#bokeh"), ctx = cv.getContext("2d"); let W, H; const P = [];
@@ -540,7 +539,7 @@ function cardHTML(d, have, missOverride) {
     if (!miss.length) badge += '<span class="badge ready">✓ Ready to pour</span>';
     else if (miss.length <= 2) badge += `<span class="badge near">Missing: ${esc(miss.join(", "))}</span>`;
   }
-  if (!d.alcoholic && d.cat !== "Mocktail") badge += '<span class="badge zero">Can be zero-proof</span>';
+  if (!d.alcoholic && d.cat !== "Mocktail" && d.base !== "None") badge += '<span class="badge zero">Can be zero-proof</span>';
   return `<div class="card" data-id="${esc(d.id)}" style="--c:${esc(d.color)}">
     <div class="thumb">${glassSVG(d)}</div>
     <div class="info"><div class="nm">${esc(d.name)}</div>
@@ -569,9 +568,9 @@ const M = { cat: "All", base: "Any spirit", q: "", ready: false, fl: new Set() }
 function renderChips() {
   const cats = S.custom.length ? ["All", "★ Mine", ...CATS.slice(1)] : CATS;
   if (!cats.includes(M.cat)) M.cat = "All";
-  $("#catChips").innerHTML = cats.map(c => `<button class="chip${M.cat === c ? " on" : ""}" data-c="${c}">${c === "Geeky" ? "🎮 Geeky" : c === "Spooky" ? "🎃 Spooky" : c === "Mocktail" ? "Mocktails" : c}</button>`).join("");
-  $("#flavorChips").innerHTML = `<span class="chip-lbl">Taste</span>` + FLAVORS.map(([f, e]) => `<button class="chip sm${M.fl.has(f) ? " on" : ""}" data-fl="${f}">${e} ${f}</button>`).join("");
+  $("#catChips").innerHTML = cats.map(c => `<button class="chip${M.cat === c ? " on" : ""}" data-c="${c}">${catLabel(c)}</button>`).join("");
   $("#baseChips").innerHTML = BASES.map(b => `<button class="chip sm${M.base === b ? " on" : ""}" data-b="${b}">${b}</button>`).join("");
+  $("#flavorChips").innerHTML = `<span class="chip-lbl">Taste</span>` + FLAVORS.map(([f, e]) => `<button class="chip sm${M.fl.has(f) ? " on" : ""}" data-fl="${f}">${e} ${f}</button>`).join("");
 }
 function renderMenu() {
   const have = cab(), q = norm(M.q.trim());
@@ -605,23 +604,28 @@ $("#diceBtn").onclick = () => {
 };
 
 // ───────────────────────── DETAIL SHEET ─────────────────────────
-let openId = null, pour = "single", landT = null, batchOn = false, serves = 1;
-function scheduleLand() { clearTimeout(landT); if (S.fx) landT = setTimeout(() => { if (openId) sfx("drop"); }, 1500); }
+let openId = null, pour = "single", batchOn = false, serves = 1;
+const baseServes = d => (d.ex && d.ex.serves) || 1;
 function openDrink(id) {
-  const d = BY_ID[id]; if (!d) return; openId = id; pour = "single"; batchOn = false; serves = (d.ex && d.ex.serves) || 1;
+  const d = BY_ID[id]; if (!d) return; openId = id; pour = "single"; batchOn = false; serves = baseServes(d);
   renderDetail(true);
   $("#sheet").classList.add("open"); $("#sheet").setAttribute("aria-hidden", "false");
   $("#sheetInner").scrollTop = 0; sfx("drop");
   if (!(history.state && history.state.d)) history.pushState({ d: id }, "");
 }
 function closeDrink(fromPop) {
-  if (!openId) return; openId = null; clearTimeout(landT); $("#sheet").classList.remove("open"); $("#sheet").setAttribute("aria-hidden", "true");
+  if (!openId) return; openId = null; $("#sheet").classList.remove("open"); $("#sheet").setAttribute("aria-hidden", "true");
   if (!fromPop && history.state && history.state.d) history.back();
   refreshCurrent();
 }
-addEventListener("popstate", () => { if ($("#builder").classList.contains("open")) closeBuilder(); else if (openId) closeDrink(true); });
+let skipPop = false;
+addEventListener("popstate", () => {
+  if (skipPop) { skipPop = false; return; }
+  if (BM.open) closeBM(true);
+  else if ($("#builder").classList.contains("open")) closeBuilder();
+  else if (openId) closeDrink(true);
+});
 function rerenderDetail() { const sc = $("#sheetInner").scrollTop; renderDetail(false); $("#sheetInner").scrollTop = sc; }
-const baseServes = d => (d.ex && d.ex.serves) || 1;
 function detailCtx(d) {
   const dbl = doubleSet(d), canDbl = dbl.size > 0, isDbl = canDbl && pour === "double";
   const bm = batchOn ? serves / baseServes(d) : 1;
@@ -634,10 +638,9 @@ function ingRowsHTML(d, have, X) {
     const cls = using ? (using === i.name || always ? "have" : "sub") : "miss";
     const subNote = using && using !== i.name && !always ? `<small class="subnote">✓ Using your ${esc(using)}</small>` : "";
     const x2 = X.isDbl && X.dbl.has(i);
-    const m = X.multOf(i);
     return `<div class="ing-row" data-ing="${esc(i.name)}"><button class="dot ${cls}${i.opt ? " opt" : ""}" ${always ? "disabled" : ""} aria-label="Toggle in cabinet">✓</button>
       <div class="ing-name"><b>${esc(ingLabel(i))}</b>${i.opt ? ' <small style="display:inline;color:var(--amber)">optional</small>' : ""}${i.note ? `<small>${esc(i.note)}</small>` : ""}${subNote}</div>
-      <div class="amt${x2 ? " dbl" : ""}${batchOn && X.bm > 1 ? " bat" : ""}">${esc(fmtAmt(i, m))}${x2 ? '<span class="x2">×2</span>' : ""}</div></div>`;
+      <div class="amt${x2 ? " dbl" : ""}${batchOn && X.bm > 1 ? " bat" : ""}">${esc(fmtAmt(i, X.multOf(i)))}${x2 ? '<span class="x2">×2</span>' : ""}</div></div>`;
   }).join("");
 }
 function qtr(n) { const q = Math.ceil(n * 4) / 4; return q < .25 ? "under ¼" : frac(q); }
@@ -687,6 +690,12 @@ function updateDynamic() {
   const ib = $("#ingBox"); if (ib) ib.innerHTML = ingRowsHTML(d, have, X);
   const bi = $("#batchInfo"); if (bi) bi.innerHTML = batchInfoHTML(d, X);
   const sn = $("#servesN"); if (sn) sn.textContent = serves;
+  const bs = $("#bmStartSub"); if (bs) bs.textContent = bmStartSub(d, X);
+}
+function bmStartSub(d, X) {
+  const n = buildSteps(d).length;
+  const extra = [X.isDbl ? "double" : "", batchOn && serves > baseServes(d) ? `for ${serves}` : ""].filter(Boolean).join(", ");
+  return `${n} big steps · timers · screen stays on${extra ? ` · ${extra}` : ""}`;
 }
 function renderDetail(anim) {
   const d = BY_ID[openId]; if (!d) { closeDrink(); return; }
@@ -714,7 +723,7 @@ function renderDetail(anim) {
       <div class="tap-hint">tap the glass for another drop</div>
       <h1>${esc(d.name)}</h1>
       <div class="facts">
-        <div class="fact"><small>Style</small><span>${esc(d.cat === "Geeky" ? "🎮 Geeky" : d.cat === "Spooky" ? "🎃 Spooky" : d.cat)}${d.custom ? " · ★ Mine" : ""}</span></div>
+        <div class="fact"><small>Style</small><span>${esc(catLabel(d.cat) === "Mocktails" ? "Mocktail" : catLabel(d.cat))}${d.custom ? " · ★ Mine" : ""}</span></div>
         <div class="fact"><small>Base</small><span>${esc(baseLabel(d))}${!d.alcoholic && d.cat !== "Mocktail" && d.base !== "None" ? " (opt.)" : ""}</span></div>
         <div class="fact"><small>Serve in</small><span>${esc(GLASS_LABEL[d.glass] || "Glass")}</span></div>
         <div class="fact"><small>Method</small><span>${esc(METHOD_NAME[d.method] || "Built")}</span></div>
@@ -729,6 +738,7 @@ function renderDetail(anim) {
     <div class="ing" id="ingBox" style="margin-top:10px">${ingRowsHTML(d, have, X)}</div>
     <div class="hint">Tap a circle to add/remove that ingredient from your Liquor Cabinet.</div>
     <div class="sec-h"><h3>How to make it</h3><button class="link" id="resetSteps">Reset</button></div>
+    <button class="bm-start" id="bmStart"><span class="bi">🍸</span><span><b>Bartender Mode</b><small id="bmStartSub">${esc(bmStartSub(d, X))}</small></span><span class="go">›</span></button>
     <div class="steps">${steps.map((s, k) => `<div class="step" data-k="${k}"><div class="n">${k + 1}</div><div class="t">${esc(s)}</div></div>`).join("")}</div>
     ${d.garnish && !/^none$/i.test(d.garnish) ? `<div class="sec-h"><h3>Garnish</h3></div><div class="garnish"><span class="gi">🍒</span><span>${esc(d.garnish)}</span></div>` : ""}
     <div class="detail-actions">
@@ -741,6 +751,7 @@ function renderDetail(anim) {
 }
 $("#sheetInner").addEventListener("click", e => {
   if (e.target.closest("#shClose")) { closeDrink(); return; }
+  if (e.target.closest("#bmStart")) { openBM(); return; }
   if (e.target.closest("#bigGlass")) {
     const d = BY_ID[openId]; if (!d) return;
     $("#bigGlass").innerHTML = glassSVG(d, { anim: S.fx, hero: true }); sfx("drop"); return;
@@ -787,6 +798,208 @@ function swipeClose(inner, fn) {
 }
 swipeClose($("#sheetInner"), () => closeDrink());
 
+// ───────────────────────── BARTENDER MODE ─────────────────────────
+const BM = { open: false, d: null, steps: [], i: 0, got: new Set(), mult: null, timer: null, wl: null };
+const GENERIC = new Set(["juice", "syrup", "liqueur", "sauce", "water", "soda", "wine", "white", "dark", "dry", "sweet", "blanco", "beer", "whole", "leaves", "brine", "purée", "cream", "sugar", "black", "green", "yellow", "blue", "orange", "spiced", "aged", "hot", "cold", "fresh", "cube", "cubes"]);
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function stepMentions(text, ings) {
+  let work = " " + text.toLowerCase() + " ";
+  const found = [], phrases = [];
+  const sorted = ings.filter(i => !i.side).slice().sort((a, b) => b.name.length - a.name.length);
+  const tryMatch = (i, p) => {
+    const re = new RegExp(`(^|[^a-zà-ÿ])(${reEsc(p.toLowerCase())})(?=[^a-zà-ÿ]|$)`, "i");
+    const m = work.match(re); if (!m) return false;
+    const at = m.index + m[1].length;
+    phrases.push(text.substr(at - 1, p.length));
+    work = work.slice(0, at) + " ".repeat(p.length) + work.slice(at + p.length);
+    return true;
+  };
+  for (const i of sorted) if (!found.includes(i) && tryMatch(i, i.name)) found.push(i);
+  for (const i of sorted) {
+    if (found.includes(i)) continue;
+    const words = i.name.split(/[\s-]+/).filter(w => w.length >= 3 && !GENERIC.has(w.toLowerCase()));
+    for (const w of words) if (tryMatch(i, w)) { found.push(i); break; }
+  }
+  return { list: ings.filter(i => found.includes(i)), phrases };
+}
+function markText(text, phrases) {
+  let h = esc(text);
+  phrases.filter(Boolean).sort((a, b) => b.length - a.length).forEach(p => {
+    h = h.replace(new RegExp(`(^|[^A-Za-zÀ-ÿ>])(${reEsc(esc(p))})(?=[^A-Za-zÀ-ÿ<]|$)`), "$1<mark>$2</mark>");
+  });
+  return h;
+}
+function stepTimer(text) {
+  const t = text.toLowerCase();
+  const m = t.match(/(\d+(?:\.\d+)?)(?:\s*[–-]\s*(\d+(?:\.\d+)?))?\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b/);
+  if (!m) return null;
+  const n = parseFloat(m[2] || m[1]);
+  const mult = /^h/.test(m[3]) ? 3600 : /^m/.test(m[3]) ? 60 : 1;
+  const secs = Math.round(n * mult); if (secs < 3) return null;
+  const kind = /shake|shaking/.test(t) ? "shake" : /stir/.test(t) ? "stir" : /blend/.test(t) ? "blend" :
+    /chill|refrigerat|freez|fridge/.test(t) ? "chill" : /simmer|warm|heat|boil/.test(t) ? "heat" : /rest|set/.test(t) ? "rest" : "time";
+  return { secs, kind };
+}
+const TIMER_ICON = { shake: ["🍸", "sh", "Shake it!"], stir: ["🥄", "st", "Stir"], blend: ["🌀", "st", "Blend"], chill: ["❄️", "", "Chill"], heat: ["🔥", "", "Simmer"], rest: ["⏳", "", "Rest"], time: ["⏱️", "", "Timer"] };
+const fmtClock = s => { s = Math.max(0, Math.ceil(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+
+async function keepAwake() {
+  try { if ("wakeLock" in navigator && !BM.wl) { BM.wl = await navigator.wakeLock.request("screen"); BM.wl.addEventListener("release", () => { BM.wl = null; }); } } catch (e) { BM.wl = null; }
+  $("#bmAwake").textContent = BM.wl ? "☀️ Screen will stay on while you mix" : "Tip: if your screen dims, raise Auto-Lock in iPhone Settings → Display";
+}
+document.addEventListener("visibilitychange", () => { if (BM.open && document.visibilityState === "visible") keepAwake(); });
+function speak(text) {
+  if (!S.voice || !("speechSynthesis" in window)) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/[^\w\s.,'!?¼½¾—–:-]/g, " ").replace(/¼/g, " quarter").replace(/½/g, " and a half").replace(/¾/g, " three quarters").replace(/\boz\b/g, "ounces")); u.rate = 1; u.pitch = 1; speechSynthesis.speak(u); } catch (e) {}
+}
+function syncBMTools() {
+  $("#bmVoice").textContent = S.voice ? "🔊" : "🔇"; $("#bmVoice").classList.toggle("lit", S.voice);
+  $("#bm").dataset.size = S.bmSize; $("#voiceSwitch").classList.toggle("on", S.voice);
+}
+function openBM() {
+  const d = BY_ID[openId]; if (!d) return;
+  const X = detailCtx(d);
+  BM.d = d; BM.steps = buildSteps(d); BM.i = 0; BM.got = new Set(); BM.mult = X.multOf; BM.open = true;
+  BM.meta = { dbl: X.isDbl, serves: batchOn && serves > baseServes(d) ? serves : baseServes(d) > 1 ? baseServes(d) : 0 };
+  $("#bmName").textContent = d.name;
+  $("#bm").style.setProperty("--bmc", shade(d.color, -.55));
+  syncBMTools();
+  $("#bm").classList.add("on"); $("#bm").setAttribute("aria-hidden", "false");
+  history.pushState({ bm: 1 }, "");
+  keepAwake(); sfx("swoosh"); renderBM(1);
+}
+function closeBM(fromPop) {
+  if (!BM.open) return; BM.open = false; stopTimer();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (BM.wl) { BM.wl.release().catch(() => {}); BM.wl = null; }
+  $("#bm").classList.remove("on"); $("#bm").setAttribute("aria-hidden", "true");
+  if (!fromPop && history.state && history.state.bm) { skipPop = true; history.back(); }
+}
+const total = () => BM.steps.length + 2; // gather + steps + done
+function renderBM(dir) {
+  stopTimer();
+  const d = BM.d, i = BM.i, n = BM.steps.length, last = total() - 1;
+  $("#bmProg").innerHTML = Array.from({ length: total() }, (_, k) => `<i class="${k < i ? "done" : k === i ? "cur" : ""}"></i>`).join("");
+  $("#bmSub").textContent = i === 0 ? "Get set up" : i === last ? "Done!" : `Step ${i} of ${n}`;
+  const prev = $("#bmPrev"), next = $("#bmNext");
+  prev.disabled = i === 0; next.classList.remove("ready");
+  prev.style.visibility = i === last ? "hidden" : ""; next.style.display = i === last ? "none" : "";
+  let html = "";
+  if (i === 0) {
+    const req = d.ingredients.filter(x => !x.side);
+    const side = d.ingredients.filter(x => x.side);
+    const meta = [`🥃 ${GLASS_LABEL[d.glass]}`, `🧪 ${METHOD_NAME[d.method] || "Built"}`];
+    if (BM.meta.dbl) meta.push("💪 Double");
+    if (BM.meta.serves) meta.push(`🎉 Serves ${BM.meta.serves}`);
+    html = `<div class="bm-kicker">Gather your ingredients</div>
+      <div class="bm-glass sm">${glassSVG(d)}</div>
+      <div class="bm-meta">${meta.map(m => `<span>${esc(m)}</span>`).join("")}</div>
+      <div class="bm-list">${[...req, ...side].map((x, k) => { const idx = d.ingredients.indexOf(x);
+        return `<div class="bm-li${BM.got.has(idx) ? " got" : ""}" data-gi="${idx}"><span class="ck">✓</span><span class="nm">${esc(ingLabel(x))}${x.opt ? " <small>optional</small>" : x.side ? " <small>on the side</small>" : x.note ? `<small>${esc(x.note)}</small>` : ""}</span><span class="am">${esc(fmtAmt(x, BM.mult(x)))}</span></div>`; }).join("")}</div>
+      ${d.garnish && !/^none$/i.test(d.garnish) ? `<div class="bm-meta"><span>🍒 Garnish: ${esc(d.garnish)}</span></div>` : ""}
+      <div class="bm-hint">Tap each one as you set it out · swipe or tap Next to start</div>`;
+    next.textContent = "Let's mix ›";
+    speak(`Let's make a ${d.name}. Gather your ingredients.`);
+  } else if (i === last) {
+    html = `<div class="bm-done"><div class="big-glass">${glassSVG(d, { anim: S.fx, hero: true })}</div>
+      <h2>Cheers!</h2><p>Your ${esc(d.name)} is served. 🥂</p>
+      <div class="acts"><button class="pill-btn primary" id="bmShare">📸 Share card</button>
+        <button class="pill-btn" id="bmAgain">🔁 Make another round</button>
+        <button class="pill-btn" id="bmExit">Back to the recipe</button></div></div>`;
+    setTimeout(() => { if (BM.open && BM.i === last) { sfx("clink"); setTimeout(() => sfx("tada"), 250); sparkle(innerWidth / 2, innerHeight * .32, 40, ["#f2a541", "#ffd29a", "#fff2d8", d.color]); } }, 120);
+    speak(`Cheers! Your ${d.name} is served.`);
+  } else {
+    const text = BM.steps[i - 1];
+    const { list, phrases } = stepMentions(text, d.ingredients);
+    const tm = stepTimer(text);
+    html = `<div class="bm-kicker">Step ${i} of ${n}</div><div class="bm-num">${i}</div>
+      <div class="bm-text">${markText(text, phrases)}</div>
+      ${list.length ? `<div class="bm-chips">${list.map(x => `<span class="bm-chip"><b>${esc(fmtAmt(x, BM.mult(x)) || "✓")}</b>${esc(ingLabel(x))}</span>`).join("")}</div>` : ""}
+      ${tm ? timerHTML(tm) : ""}
+      <div class="bm-hint">${i === n ? "Last step — tap Finish when it's poured" : "Swipe ← → or tap Next"}</div>`;
+    next.textContent = i === n ? "Finish 🥂" : "Next ›";
+    if (tm) BM.timer = { total: tm.secs, left: tm.secs, kind: tm.kind, run: false, end: 0, iv: null, beat: 0 };
+    speak(`Step ${i}. ${text}`);
+  }
+  const st = $("#bmStage");
+  st.innerHTML = `<div class="bm-slide${dir < 0 ? " back" : ""}">${html}</div>`; st.scrollTop = 0;
+  if (i === 0) updateGatherBtn();
+}
+function timerHTML(tm) {
+  const [ic, cls, lb] = TIMER_ICON[tm.kind];
+  const C = 2 * Math.PI * 70;
+  return `<div class="bm-timer"><div class="bm-ring" id="bmRing">
+      <svg viewBox="0 0 160 160"><defs><linearGradient id="bmGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#e8742a"/></linearGradient></defs>
+        <circle class="trk" cx="80" cy="80" r="70"/><circle class="arc" id="bmArc" cx="80" cy="80" r="70" stroke-dasharray="${C}" stroke-dashoffset="0"/></svg>
+      <div class="mid"><span class="ic ${cls}">${ic}</span><span class="t" id="bmT">${fmtClock(tm.secs)}</span><span class="lb" id="bmLb">Tap to start</span></div></div>
+    <div class="bm-tbtns"><button class="pill-btn" id="bmTGo">▶ ${esc(lb)}</button><button class="pill-btn" id="bmTReset">↺ Reset</button></div></div>`;
+}
+function drawTimer() {
+  const T = BM.timer; if (!T) return;
+  const C = 2 * Math.PI * 70, arc = $("#bmArc"), t = $("#bmT");
+  if (arc) arc.style.strokeDashoffset = (C * (1 - T.left / T.total)).toFixed(1);
+  if (t) t.textContent = fmtClock(T.left);
+  const ring = $("#bmRing"); if (ring) { ring.classList.toggle("run", T.run); }
+  const go = $("#bmTGo"); if (go) go.textContent = T.run ? "❚❚ Pause" : T.left < T.total && T.left > 0 ? "▶ Resume" : "▶ " + TIMER_ICON[T.kind][2];
+}
+function startTimer() {
+  const T = BM.timer; if (!T || T.run) return;
+  if (T.left <= 0) T.left = T.total;
+  $("#bmRing").classList.remove("done");
+  T.run = true; T.end = Date.now() + T.left * 1000; sfx("pop");
+  $("#bmLb").textContent = TIMER_ICON[T.kind][2];
+  const beatFx = () => { if (T.kind === "shake") sfx("shake"); else if (T.kind === "stir") sfx("stir"); };
+  beatFx(); T.beat = setInterval(beatFx, T.kind === "shake" ? 1400 : 1350);
+  if (T.kind !== "shake" && T.kind !== "stir") { clearInterval(T.beat); T.beat = 0; }
+  T.iv = setInterval(() => {
+    T.left = (T.end - Date.now()) / 1000;
+    if (T.left <= 0) { T.left = 0; finishTimer(); }
+    drawTimer();
+  }, 200);
+  drawTimer();
+}
+function pauseTimer() { const T = BM.timer; if (!T || !T.run) return; T.run = false; clearInterval(T.iv); clearInterval(T.beat); T.left = Math.max(0, (T.end - Date.now()) / 1000); sfx("tick"); drawTimer(); }
+function finishTimer() {
+  const T = BM.timer; T.run = false; clearInterval(T.iv); clearInterval(T.beat);
+  sfx("bell"); try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
+  const ring = $("#bmRing"); if (ring) { ring.classList.add("done"); const r = ring.getBoundingClientRect(); sparkle(r.left + r.width / 2, r.top + r.height / 2, 28); }
+  const lb = $("#bmLb"); if (lb) lb.textContent = "Time! ✓";
+  $("#bmNext").classList.add("ready");
+  speak("Time's up!"); toast("⏰ Time! On to the next step");
+}
+function stopTimer() { const T = BM.timer; if (T) { clearInterval(T.iv); clearInterval(T.beat); } BM.timer = null; }
+function updateGatherBtn() {
+  const d = BM.d; const need = d.ingredients.map((x, k) => [x, k]).filter(([x]) => !x.opt && !x.side);
+  $("#bmNext").classList.toggle("ready", need.every(([, k]) => BM.got.has(k)));
+}
+function goBM(delta) {
+  const ni = BM.i + delta; if (ni < 0 || ni >= total()) return;
+  BM.i = ni; sfx(delta > 0 ? "swoosh" : "tick"); renderBM(delta);
+}
+$("#bmNext").onclick = () => goBM(1);
+$("#bmPrev").onclick = () => goBM(-1);
+$("#bmClose").onclick = () => { closeBM(); sfx("thunk"); };
+$("#bmVoice").onclick = () => { S.voice = !S.voice; save(); syncBMTools(); if (S.voice) { toast("🔊 I'll read each step out loud"); speak(BM.i === 0 ? "Voice on." : BM.steps[BM.i - 1] || "Voice on."); } else { try { speechSynthesis.cancel(); } catch (e) {} toast("🔇 Voice off"); } };
+$("#bmSize").onclick = () => { S.bmSize = (S.bmSize + 1) % 3; save(); syncBMTools(); sfx("tick"); toast(["Text: cozy", "Text: regular", "Text: across-the-room"][S.bmSize]); };
+$("#bmStage").addEventListener("click", e => {
+  const li = e.target.closest(".bm-li");
+  if (li) { const k = +li.dataset.gi; if (BM.got.has(k)) { BM.got.delete(k); sfx("thunk"); } else { BM.got.add(k); sfx("pop"); const r = li.querySelector(".ck").getBoundingClientRect(); sparkle(r.left + 15, r.top + 15, 8, ["#9ccc6a", "#d8f0a0", "#fff"]); }
+    li.classList.toggle("got", BM.got.has(k)); updateGatherBtn(); return; }
+  if (e.target.closest("#bmTGo") || e.target.closest("#bmRing")) { const T = BM.timer; if (!T) return; T.run ? pauseTimer() : startTimer(); return; }
+  if (e.target.closest("#bmTReset")) { const T = BM.timer; if (!T) return; pauseTimer(); T.left = T.total; $("#bmRing").classList.remove("done"); $("#bmLb").textContent = "Tap to start"; drawTimer(); return; }
+  if (e.target.closest("#bmShare")) { shareCard(BM.d); return; }
+  if (e.target.closest("#bmAgain")) { BM.i = 0; BM.got = new Set(); sfx("pour"); renderBM(-1); return; }
+  if (e.target.closest("#bmExit")) { closeBM(); return; }
+  if (e.target.closest(".bm-done .big-glass")) { e.target.closest(".big-glass").innerHTML = glassSVG(BM.d, { anim: S.fx, hero: true }); sfx("drop"); }
+});
+(() => { // swipe left/right between steps
+  let x0 = null, y0 = null; const st = $("#bmStage");
+  st.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  st.addEventListener("touchend", e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4) goBM(dx < 0 ? 1 : -1); });
+})();
+addEventListener("keydown", e => { if (!BM.open) return; if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); goBM(1); } else if (e.key === "ArrowLeft") goBM(-1); else if (e.key === "Escape") closeBM(); });
+
 // ───────────────────────── SHARE CARD ─────────────────────────
 const F_SERIF = 'Georgia, "Times New Roman", serif', F_SANS = '-apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif',
   F_SCRIPT = '"Snell Roundhand", "Apple Chancery", "Brush Script MT", "Segoe Script", cursive';
@@ -822,7 +1035,7 @@ function drawCard(ctx, d, img, H) {
   y += 408 + 30;
   ctx.font = `bold 78px ${F_SERIF}`;
   for (const ln of wrapLines(ctx, d.name, W - 2 * P)) { y += 80; T(ln, W / 2, y, `bold 78px ${F_SERIF}`, "#fbe7c9"); }
-  y += 54; T(`${d.cat === "Spooky" ? "🎃 Spooky" : d.cat === "Geeky" ? "🎮 Geeky" : d.cat}  ·  ${baseLabel(d)}  ·  ${GLASS_LABEL[d.glass] || "Glass"}`, W / 2, y, `30px ${F_SANS}`, "#c9ad8c");
+  y += 54; T(`${catLabel(d.cat)}  ·  ${baseLabel(d)}  ·  ${GLASS_LABEL[d.glass] || "Glass"}`, W / 2, y, `30px ${F_SANS}`, "#c9ad8c");
   const st = strength(d, X.isDbl ? X.dbl : null), [lab, em] = strengthLabel(d.alcoholic ? st.abv : 0);
   const pills = [d.alcoholic ? `${em} ${lab} · ≈${Math.round(st.abv)}% ABV` : "🍃 Zero-proof"];
   if (X.isDbl) pills.push("💪 Double");
@@ -957,21 +1170,16 @@ function renderBuilder() {
       <b style="font-family:var(--serif);font-size:17px;color:#f6dcb8">${B.id ? "Edit recipe" : "New recipe"}</b><span style="width:38px"></span></div>
     <div class="b-hero"><div class="b-preview" id="bPreview" style="--pc:${esc(B.color)}">${glassSVG(pv, { anim: 1 })}</div>
       <div class="b-title"><h2 id="bTitle">${esc(B.name || "Your masterpiece")}</h2><p>Live preview — glass, color & garnish update as you go.</p></div></div>
-
     <div class="fld"><label>Drink name</label><input class="inp" data-f="name" value="${esc(B.name)}" placeholder="e.g. The LeBlanc Old Fashioned" maxlength="60"></div>
     <div class="fld"><label>Description</label><textarea class="ta" data-f="desc" placeholder="What's the story? How does it taste?">${esc(B.desc)}</textarea></div>
     <div class="fld row2">
       <div><span class="lbl">Style</span><select class="sel" data-f="cat">${BUILD_CATS.map(c => opt(c, B.cat, c === "Mocktail" ? "Mocktail (zero-proof)" : c)).join("")}</select></div>
       <div><span class="lbl">Base spirit</span><select class="sel" data-f="base">${BUILD_BASES.map(c => opt(c, B.base, c === "None" ? "None (zero-proof)" : c)).join("")}</select></div>
     </div>
-
     <div class="fld"><span class="lbl">Glass</span><div class="glass-grid">${Object.keys(GL).map(k => `<button class="gopt${B.glass === k ? " on" : ""}" data-glass="${k}"><div class="gi">${glassSVG({ glass: k, color: B.color, ingredients: [], garnish: "", cat: "", name: "" })}</div><span>${esc(GLASS_LABEL[k])}</span></button>`).join("")}</div></div>
-
     <div class="fld"><span class="lbl">Drink color</span><div class="swatches">${SWATCHES.map(c => `<button class="sw${B.color.toLowerCase() === c ? " on" : ""}" data-color="${c}" style="background:${c};--c:${c}" aria-label="${c}"></button>`).join("")}
       <label class="sw-custom${SWATCHES.includes(B.color.toLowerCase()) ? "" : " on"}" style="${SWATCHES.includes(B.color.toLowerCase()) ? "" : `background:${esc(B.color)}`}">🎨<input type="color" id="bColor" value="${esc(B.color)}"></label></div></div>
-
     <div class="fld"><span class="lbl">How it's made</span><select class="sel" data-f="method">${Object.entries(METHOD_NAME).filter(([k]) => k !== "custom").map(([k, v]) => opt(k, B.method, v)).join("")}</select></div>
-
     <div class="fld"><span class="lbl">Ingredients</span><div id="bIngs">${B.ings.map((i, k) => `
       <div class="b-ing" data-i="${k}"><div class="r1">
         <input class="inp" data-ing="amt" value="${esc(i.amt)}" placeholder="1½" inputmode="decimal">
@@ -982,16 +1190,15 @@ function renderBuilder() {
         <button class="mini-x" data-b="delIng" aria-label="Remove">✕</button></div></div>`).join("")}</div>
       <button class="add-btn" data-b="addIng">+ Add ingredient</button>
       <div class="hint">Type amounts like 2, 1.5, 1 1/2 or ¾. Pick from the list or type something brand new — new ingredients get their own shelf in your Liquor Cabinet.</div></div>
-
     <div class="fld"><label>Garnish</label><input class="inp" data-f="garnish" value="${esc(B.garnish)}" placeholder="e.g. Orange peel and a cherry">
       <div class="chips wrap">${GARNISH_QUICK.map(g => `<button class="chip sm" data-gq="${esc(g)}">+ ${esc(g)}</button>`).join("")}</div></div>
-
     <div class="fld"><span class="lbl">Steps</span>
       <div class="seg wide" style="margin-bottom:10px"><button data-sm="auto" class="${B.stepsMode === "auto" ? "on" : ""}">✨ Auto-write for me</button><button data-sm="custom" class="${B.stepsMode === "custom" ? "on" : ""}">✍️ Write my own</button></div>
       ${B.stepsMode === "auto" ? `<div class="auto-box">Garnish writes the steps from your method, glass & ingredients:<ol id="bAuto">${autoSteps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></div>` :
       `<div id="bSteps">${B.steps.map((s, k) => `<div class="b-step" data-s="${k}"><div class="n">${k + 1}</div><textarea class="ta" data-step="${k}" placeholder="Describe this step…">${esc(s)}</textarea>
         <div class="tools"><button data-b="up" aria-label="Move up">▲</button><button data-b="down" aria-label="Move down">▼</button><button data-b="delStep" aria-label="Delete">✕</button></div></div>`).join("")}</div>
-      <button class="add-btn" data-b="addStep">+ Add step</button>`}
+      <button class="add-btn" data-b="addStep">+ Add step</button>
+      <div class="hint">Tip: write times like “shake for 15 seconds” and Bartender Mode adds a timer automatically.</div>`}
     </div>
     <div class="err" id="bErr"></div>
     <div class="save-bar">
@@ -1059,7 +1266,7 @@ function saveBuilder(btn) {
   const r = btn.getBoundingClientRect(); sparkle(r.left + r.width / 2, r.top, 34);
   sfx("tada"); toast(isNew ? `${c.name} added to the menu! 🍸` : "Recipe updated ✨");
   closeBuilder();
-  if (openId) { openId = c.id; pour = "single"; renderDetail(true); $("#sheetInner").scrollTop = 0; }
+  if (openId) { openId = c.id; pour = "single"; batchOn = false; serves = 1; renderDetail(true); $("#sheetInner").scrollTop = 0; }
   else openDrink(c.id);
   refreshCurrent();
 }
@@ -1068,7 +1275,6 @@ $("#newBtn").onclick = () => openBuilder();
 $("#newBtn2").onclick = () => openBuilder();
 
 // ───────────────────────── CABINET ─────────────────────────
-// Every visit starts with all shelves collapsed; open them one by one.
 const C = { q: "", only: false, closed: new Set() };
 function collapseAllShelves() { C.closed = new Set(SHELVES.map(s => s[0])); }
 function toggleCab(n) {
@@ -1158,13 +1364,14 @@ const SND_ON = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path 
 const SND_OFF = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
 function syncToggles() {
   $("#soundBtn").innerHTML = S.sound ? SND_ON : SND_OFF;
-  $("#sndSwitch").classList.toggle("on", S.sound); $("#fxSwitch").classList.toggle("on", S.fx);
+  $("#sndSwitch").classList.toggle("on", S.sound); $("#fxSwitch").classList.toggle("on", S.fx); $("#voiceSwitch").classList.toggle("on", S.voice);
   document.body.classList.toggle("nofx", !S.fx);
   if (!S.fx) { const c = $("#bokeh"); c.getContext("2d").clearRect(0, 0, c.width, c.height); }
 }
 function toggleSound() { S.sound = !S.sound; save(); syncToggles(); if (S.sound) sfx("clink"); toast(S.sound ? "Sound on — clink clink 🔊" : "Sound off. Shhh, speakeasy mode 🤫"); }
 $("#soundBtn").onclick = toggleSound; $("#sndSwitch").onclick = toggleSound;
 $("#fxSwitch").onclick = () => { S.fx = !S.fx; save(); syncToggles(); sfx("tick"); };
+$("#voiceSwitch").onclick = () => { S.voice = !S.voice; save(); syncToggles(); syncBMTools(); sfx("tick"); if (S.voice) speak("Voice on. Cheers!"); };
 $("#exportBtn").onclick = () => {
   const data = JSON.stringify({ app: "Garnish", v: 2, exported: new Date().toISOString(), cab: S.cab, fav: S.fav, units: S.units, custom: S.custom }, null, 2);
   const blob = new Blob([data], { type: "application/json" }); const a = document.createElement("a");
@@ -1183,7 +1390,7 @@ $("#importFile").onchange = e => {
   rd.readAsText(f);
 };
 $("#resetBtn").onclick = () => { if (!confirm("Empty your Liquor Cabinet and clear all favorites? (Your own recipes stay.)")) return; S.cab = []; S.fav = []; S.pick = []; save(); sfx("thunk"); toast("Bar wiped clean. Last call!"); refreshCurrent(); };
-function renderAbout() { $("#about").innerHTML = `Garnish v2.2 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
+function renderAbout() { $("#about").innerHTML = `Garnish v2.3 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
 
 // ───────────────────────── Navigation ─────────────────────────
 let current = "menu";
@@ -1201,8 +1408,9 @@ function refreshCurrent() {
 $(".tabbar").onclick = e => { const b = e.target.closest("[data-view]"); if (b) show(b.dataset.view); };
 
 // init
-rebuild(); collapseAllShelves(); renderChips(); renderMenu(); syncUnits(); syncToggles(); renderAbout(); save();
-window.Garnish = { open: openDrink, ids: () => DR.map(d => d.id), steps: id => buildSteps(BY_ID[id]), build: openBuilder, dbl: id => [...doubleSet(BY_ID[id])].map(i => i.name) };
+rebuild(); collapseAllShelves(); renderChips(); renderMenu(); syncUnits(); syncToggles(); syncBMTools(); renderAbout(); save();
+window.Garnish = { open: openDrink, ids: () => DR.map(d => d.id), steps: id => buildSteps(BY_ID[id]), build: openBuilder,
+  dbl: id => [...doubleSet(BY_ID[id])].map(i => i.name), bm: openBM, timer: t => stepTimer(t), mentions: (id, k) => stepMentions(buildSteps(BY_ID[id])[k], BY_ID[id].ingredients).list.map(i => i.name) };
 
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 try { screen.orientation && screen.orientation.lock && screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
