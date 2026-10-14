@@ -1,4 +1,4 @@
-/* Garnish — the home bar app (v8) */
+/* Garnish — the home bar app (v10) */
 (() => {
 'use strict';
 
@@ -44,8 +44,10 @@ const catLabel = c => c === "Geeky" ? "🎮 Geeky" : c === "Spooky" ? "🎃 Spoo
 
 // ───────────────────────── State ─────────────────────────
 const KEY = "garnish.v1";
-const S = Object.assign({ cab: [], fav: [], units: "oz", sound: true, fx: true, pick: [], custom: [], voice: false, bmSize: 1 }, safeLoad());
+const S = Object.assign({ cab: [], fav: [], units: "oz", sound: true, fx: true, pick: [], custom: [], voice: false, bmSize: 1, quiz: null }, safeLoad());
 if (!Array.isArray(S.custom)) S.custom = [];
+if (!S.quiz || typeof S.quiz !== "object") S.quiz = {};
+S.quiz = Object.assign({ played: 0, right: 0, asked: 0, best: {}, bestStreak: 0, deck: "all", types: null, len: 10 }, S.quiz);
 delete S.closedShelves;
 function safeLoad() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Couldn't save — storage full?"); } }
@@ -480,6 +482,8 @@ const SFX = {
   ding() { const t = AC.currentTime; tone(1320, t, 0.35, 0.07); tone(1980, t + .06, 0.35, 0.05); },
   bell() { const t = AC.currentTime; [0, .35, .7].forEach(o => { tone(1568, t + o, 0.6, 0.12); tone(2349, t + o, 0.5, 0.05); }); },
   swoosh() { const t = AC.currentTime; const f = noise(t, 0.22, 0.12, "bandpass", 900, 1.2); f.frequency.exponentialRampToValueAtTime(3200, t + 0.2); },
+  right() { const t = AC.currentTime; tone(880, t, 0.16, 0.09, "triangle"); tone(1320, t + .09, 0.3, 0.09, "triangle"); tone(2637, t + .09, 0.5, 0.03); },
+  wrong() { const t = AC.currentTime; tone(220, t, 0.18, 0.14, "sawtooth", 160); tone(207, t + .16, 0.28, 0.12, "sawtooth", 130); },
   tada() { const t = AC.currentTime; [784, 988, 1175, 1568].forEach((f, k) => tone(f, t + k * 0.07, 0.4, 0.07, "triangle")); }
 };
 function sfx(name) { if (!S.sound) return; if (!ac()) return; try { SFX[name](); } catch (e) {} }
@@ -875,7 +879,7 @@ function closeBM(fromPop) {
   $("#bm").classList.remove("on"); $("#bm").setAttribute("aria-hidden", "true");
   if (!fromPop && history.state && history.state.bm) { skipPop = true; history.back(); }
 }
-const total = () => BM.steps.length + 2; // gather + steps + done
+const total = () => BM.steps.length + 2;
 function renderBM(dir) {
   stopTimer();
   const d = BM.d, i = BM.i, n = BM.steps.length, last = total() - 1;
@@ -894,7 +898,7 @@ function renderBM(dir) {
     html = `<div class="bm-kicker">Gather your ingredients</div>
       <div class="bm-glass sm">${glassSVG(d)}</div>
       <div class="bm-meta">${meta.map(m => `<span>${esc(m)}</span>`).join("")}</div>
-      <div class="bm-list">${[...req, ...side].map((x, k) => { const idx = d.ingredients.indexOf(x);
+      <div class="bm-list">${[...req, ...side].map(x => { const idx = d.ingredients.indexOf(x);
         return `<div class="bm-li${BM.got.has(idx) ? " got" : ""}" data-gi="${idx}"><span class="ck">✓</span><span class="nm">${esc(ingLabel(x))}${x.opt ? " <small>optional</small>" : x.side ? " <small>on the side</small>" : x.note ? `<small>${esc(x.note)}</small>` : ""}</span><span class="am">${esc(fmtAmt(x, BM.mult(x)))}</span></div>`; }).join("")}</div>
       ${d.garnish && !/^none$/i.test(d.garnish) ? `<div class="bm-meta"><span>🍒 Garnish: ${esc(d.garnish)}</span></div>` : ""}
       <div class="bm-hint">Tap each one as you set it out · swipe or tap Next to start</div>`;
@@ -992,7 +996,7 @@ $("#bmStage").addEventListener("click", e => {
   if (e.target.closest("#bmExit")) { closeBM(); return; }
   if (e.target.closest(".bm-done .big-glass")) { e.target.closest(".big-glass").innerHTML = glassSVG(BM.d, { anim: S.fx, hero: true }); sfx("drop"); }
 });
-(() => { // swipe left/right between steps
+(() => {
   let x0 = null, y0 = null; const st = $("#bmStage");
   st.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   st.addEventListener("touchend", e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
@@ -1356,9 +1360,222 @@ function renderFav() {
 }
 bindCards($("#favList")); bindCards($("#mineList"));
 
+// ───────────────────────── QUIZ ─────────────────────────
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pickOne = a => a[Math.floor(Math.random() * a.length)];
+const ESSENTIALS = ["Vesper","Pear Martini","Dirty Martini","Dill Pickle Martini","Violet Ginny","Aperol Spritz","Irish Coffee","Amaretto Sour","Tom Collins","Long Island Iced Tea","Piña Colada","Bloody Mary","Tequila Sunrise","Gin and Tonic","Carajillo","Negroni","Daiquiri","Moscow Mule","Whiskey Sour","Manhattan","Mojito","Old Fashioned","Classic Margarita","Spicy Margarita","Wassail","Polyjuice Potion","Espresso Martini","Jello Shots","Cosmopolitan","Sour Apple Martini","Red Potion","Lavender Town Syndrome","Gin Martini","Sangria","Rum and Coke"];
+const QZ_DECKS = [
+  ["all", "🍸 Full menu", "Every drink in Garnish", () => DR],
+  ["ess", "⭐ The essentials", "Your must-know classics", () => DR.filter(d => ESSENTIALS.includes(d.name))],
+  ["classic", "🥃 Stirred & sours", "Classics, martinis, sours", () => DR.filter(d => ["Classic", "Martini", "Sour"].includes(d.cat))],
+  ["tall", "🫧 Highballs & bubbly", "Tall, fizzy & sparkling", () => DR.filter(d => ["Highball", "Bubbly"].includes(d.cat))],
+  ["tiki", "🌺 Tiki, frozen & hot", "Tropical, blended, cozy", () => DR.filter(d => ["Tiki", "Frozen", "Hot", "Dessert", "Punch"].includes(d.cat))],
+  ["party", "🎃 Shots, spooky & geeky", "Party tricks & potions", () => DR.filter(d => ["Shot", "Spooky", "Geeky"].includes(d.cat))],
+  ["zero", "🍃 Mocktails", "Zero-proof drinks", () => DR.filter(d => !d.alcoholic)],
+  ["fav", "❤️ My favorites", "Drinks you've hearted", () => S.fav.map(id => BY_ID[id]).filter(Boolean)],
+  ["cab", "🗄️ What I can make", "Ready from your cabinet", () => { const h = cab(); return DR.filter(d => !missingFor(d, h).length); }],
+  ["mine", "🧪 My recipes", "Your own creations", () => DR.filter(d => d.custom)]
+];
+const QZ_TYPES = [["ing", "🧂 Ingredients"], ["amt", "⚖️ Amounts"], ["name", "🔍 Name that drink"], ["glass", "🥂 Glassware"], ["method", "🍸 Technique"], ["odd", "🙅 Odd one out"], ["garnish", "🍒 Garnish"]];
+const QZ_KIND = { ing: "Ingredients", amt: "Amounts", name: "Name that drink", glass: "Glassware", method: "Technique", odd: "Odd one out", garnish: "Garnish" };
+const METHOD_FAMILY = { shake: "Shaken", shakeR: "Shaken", dry: "Dry shaken with egg white", stir: "Stirred", stirR: "Stirred", build: "Built right in the glass", blend: "Blended with ice", layer: "Layered", muddle: "Muddled & shaken" };
+const GLASS_TWINS = { highball: ["collins"], collins: ["highball"], martini: ["coupe"], coupe: ["martini"], hot: ["irish"], irish: ["hot"] };
+const AMT_LADDER = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6];
+const GARN_STOP = new Set(["with", "and", "optional", "your", "then", "the", "one", "big", "long", "thin", "fresh", "small", "slice", "wheel", "wedge", "peel", "twist", "sprig", "pick", "half", "from", "lots", "none", "needed", "on", "a"]);
+if (!Array.isArray(S.quiz.types) || !S.quiz.types.length) S.quiz.types = QZ_TYPES.map(t => t[0]);
+const Q = { phase: "lobby", list: [], i: 0, score: 0, streak: 0, bestStreak: 0, cur: null, answered: null, missed: [], deck: null, newBest: false };
+
+const qzRecipeLine = d => d.ingredients.filter(i => !i.opt && !i.side).map(i => `${fmtAmt(i)} ${ingLabel(i)}`.trim()).join(" · ");
+const isWhiskeyish = n => n === "Whiskey" || ANY_WHISKEY.includes(n);
+function ingDistractors(d, want, sameShelfOf) {
+  const inD = new Set(d.ingredients.map(i => i.name));
+  const notes = norm(d.ingredients.map(i => i.note).join(" "));
+  const hasWhiskey = d.ingredients.some(i => isWhiskeyish(i.name));
+  let pool = ALL_INGS.filter(n => !inD.has(n) && !notes.includes(norm(n)) && !(hasWhiskey && isWhiskeyish(n)) && (USES[n] || 0) >= 1);
+  const same = sameShelfOf ? shuffle(pool.filter(n => SHELF_OF[n] === SHELF_OF[sameShelfOf])) : [];
+  const out = same.slice(0, Math.min(2, want));
+  for (const n of shuffle(pool.sort((a, b) => (USES[b] || 0) - (USES[a] || 0)).slice(0, 70))) { if (out.length >= want) break; if (!out.includes(n)) out.push(n); }
+  return out;
+}
+function garnWords(g) { return new Set(norm(g).split(/[^a-z]+/).filter(w => w.length >= 4 && !GARN_STOP.has(w))); }
+const art = n => /^[aeiou]/i.test(n) && !/^(one|uni|eu)/i.test(n) ? "an" : "a";
+const realGarnish = g => g && !/^none/i.test(g.trim());
+function makeQuestion(d, type) {
+  const req = d.ingredients.filter(i => !i.opt && !i.side && !ALWAYS.has(i.name));
+  const nm = `<mark>${esc(d.name)}</mark>`;
+  if (type === "ing") {
+    if (!req.length) return null;
+    const ans = pickOne(req.slice().sort((a, b) => (USES[a.name] || 0) - (USES[b.name] || 0)).slice(0, Math.max(2, Math.ceil(req.length / 2))));
+    const ds = ingDistractors(d, 3, ans.name); if (ds.length < 3) return null;
+    return { type, d, q: `Which of these goes into ${art(d.name)} ${nm}?`, opts: shuffle([ans.name, ...ds]), ans: ans.name, glass: "show",
+      why: `${d.name} = ${qzRecipeLine(d)}` };
+  }
+  if (type === "odd") {
+    const names = [...new Set(req.map(i => i.name))]; if (names.length < 3) return null;
+    const ins = shuffle(names).slice(0, 3); const out = ingDistractors(d, 1, ins[0])[0]; if (!out) return null;
+    return { type, d, q: `Which one does <b>NOT</b> belong in ${art(d.name)} ${nm}?`, opts: shuffle([...ins, out]), ans: out, glass: "show",
+      why: `No ${out} here. ${d.name} = ${qzRecipeLine(d)}` };
+  }
+  if (type === "amt") {
+    const cands = req.filter(i => i.unit === "oz" && i.amt != null && !i.top && i.amt >= .25 && i.amt <= 6);
+    if (!cands.length) return null;
+    const i = pickOne(cands);
+    const near = AMT_LADDER.filter(a => Math.abs(a - i.amt) > .01).sort((a, b) => Math.abs(a - i.amt) - Math.abs(b - i.amt)).slice(0, 5);
+    const lab = a => fmtAmt({ amt: a, unit: "oz" });
+    const ans = lab(i.amt), ds = [...new Set(shuffle(near).map(lab))].filter(x => x !== ans).slice(0, 3);
+    if (ds.length < 3) return null;
+    return { type, d, q: `How much <mark>${esc(i.name)}</mark> goes into ${art(d.name)} ${nm}?`, opts: shuffle([ans, ...ds]), ans, glass: "show",
+      why: `${d.name} = ${qzRecipeLine(d)}` };
+  }
+  if (type === "glass") {
+    const twins = GLASS_TWINS[d.glass] || [];
+    const ds = shuffle(Object.keys(GL).filter(k => k !== d.glass && !twins.includes(k))).slice(0, 3);
+    return { type, d, q: `What do you serve ${art(d.name)} ${nm} in?`, opts: shuffle([d.glass, ...ds]), ans: d.glass, glassOpts: true, glass: "none",
+      why: `${cap(art(d.name))} ${d.name} is served in ${art(GLASS_WORD[d.glass])} ${GLASS_WORD[d.glass]}.` };
+  }
+  if (type === "method") {
+    if (d.method === "custom" || !METHOD_FAMILY[d.method]) return null;
+    const ans = METHOD_FAMILY[d.method];
+    const ds = shuffle([...new Set(Object.values(METHOD_FAMILY))].filter(m => m !== ans)).slice(0, 3);
+    const st = buildSteps(d).find(s => /shake|stir|blend|pour|float|muddle|build|fill/i.test(s));
+    return { type, d, q: `How is ${art(d.name)} ${nm} made?`, opts: shuffle([ans, ...ds]), ans, glass: "show",
+      why: `${ans}. ${st || ""}`.trim() };
+  }
+  if (type === "name") {
+    const key = d.required.slice().sort().join("|");
+    let pool = DR.filter(x => x.id !== d.id && x.required.slice().sort().join("|") !== key);
+    const same = shuffle(pool.filter(x => x.base === d.base)).slice(0, 2);
+    const ds = [...same]; for (const x of shuffle(pool)) { if (ds.length >= 3) break; if (!ds.includes(x)) ds.push(x); }
+    if (ds.length < 3) return null;
+    return { type, d, q: `Name that drink!`, clue: d.ingredients.filter(i => !i.opt && !i.side), opts: shuffle([d.name, ...ds.map(x => x.name)]), ans: d.name, glass: "mystery",
+      why: `That's ${art(d.name)} ${d.name}. ${d.desc || ""}` };
+  }
+  if (type === "garnish") {
+    if (!realGarnish(d.garnish)) return null;
+    const w = garnWords(d.garnish);
+    const pool = [...new Set(DR.map(x => x.garnish).filter(realGarnish))].filter(g => g !== d.garnish && ![...garnWords(g)].some(x => w.has(x)) && g.length < 48);
+    const ds = shuffle(pool).slice(0, 3); if (ds.length < 3) return null;
+    return { type, d, q: `What's the garnish on ${art(d.name)} ${nm}?`, opts: shuffle([d.garnish, ...ds]), ans: d.garnish, glass: "none",
+      why: `Garnish: ${d.garnish}.` };
+  }
+  return null;
+}
+function buildRound() {
+  const deck = QZ_DECKS.find(x => x[0] === S.quiz.deck) || QZ_DECKS[0];
+  const pool = deck[3](); const types = S.quiz.types;
+  const out = []; let order = shuffle(pool), k = 0, guard = 0;
+  while (out.length < S.quiz.len && guard++ < 600) {
+    if (k >= order.length) { order = shuffle(pool); k = 0; }
+    const d = order[k++];
+    for (const t of shuffle(types)) { const q = makeQuestion(d, t); if (q) { out.push(q); break; } }
+  }
+  return out;
+}
+function deckPool(key) { const dk = QZ_DECKS.find(x => x[0] === key); return dk ? dk[3]() : []; }
+function startQuiz() {
+  const pool = deckPool(S.quiz.deck);
+  if (pool.length < 3) { toast("That deck needs at least 3 drinks"); sfx("thunk"); return; }
+  if (!S.quiz.types.length) { toast("Pick at least one question type"); sfx("thunk"); return; }
+  Object.assign(Q, { phase: "play", list: buildRound(), i: 0, score: 0, streak: 0, bestStreak: 0, answered: null, missed: [], deck: S.quiz.deck, newBest: false });
+  if (!Q.list.length) { Q.phase = "lobby"; toast("Couldn't build questions for that combo — try more types"); return; }
+  sfx("swoosh"); renderQuiz(); scrollTo(0, 0);
+}
+function qzOptHTML(q, o, k) {
+  const L = "ABCD"[k];
+  const st = q === Q.cur && Q.answered != null ? (o === q.ans ? " right" : o === Q.answered ? " wrong" : " faded") : "";
+  const label = q.glassOpts ? GLASS_LABEL[o] : o;
+  const icon = q.glassOpts ? `<span class="gi">${glassSVG({ glass: o, color: q.d.color, ingredients: [], garnish: "", cat: "", name: "" })}</span>` : "";
+  return `<button class="qz-opt${st}" data-o="${esc(o)}"><span class="k">${L}</span>${icon}<span>${esc(label)}</span></button>`;
+}
+function renderQuiz() {
+  const box = $("#quizBox");
+  if (Q.phase === "lobby") {
+    const st = S.quiz, acc = st.asked ? Math.round(st.right / st.asked * 100) : 0;
+    const bestAll = Math.max(0, ...Object.values(st.best));
+    box.innerHTML = `
+      <div class="qz-hero"><span class="cap">🎓</span><h2>Bartender's Exam</h2><p>Think you know your drinks? Prove it — no peeking at the menu.</p></div>
+      <div class="cab-stats qz-stats"><div class="stat"><b>${st.played}</b><span>Rounds</span></div><div class="stat"><b>${bestAll}%</b><span>Best</span></div><div class="stat"><b>${st.asked ? acc + "%" : "—"}</b><span>Accuracy</span></div></div>
+      <div class="qz-lbl">Choose a deck</div>
+      <div class="qz-decks">${QZ_DECKS.map(([k, t, sub, fn]) => { const n = fn().length, ok = n >= 3;
+        return `<button class="qz-deck${S.quiz.deck === k ? " on" : ""}" data-deck="${k}" ${ok ? "" : "disabled"}><b>${esc(t)}</b><small>${ok ? `${n} drinks${st.best[k] != null ? ` · best ${st.best[k]}%` : ""}` : (k === "fav" ? "Heart 3+ drinks first" : k === "cab" ? "Stock your cabinet first" : k === "mine" ? "Create 3+ recipes first" : esc(sub))}</small></button>`; }).join("")}</div>
+      <div class="qz-lbl">Question types</div>
+      <div class="qz-types">${QZ_TYPES.map(([k, l]) => `<button class="chip sm${S.quiz.types.includes(k) ? " on" : ""}" data-qt="${k}">${l}</button>`).join("")}</div>
+      <div class="qz-lbl">Round length</div>
+      <div class="seg wide" id="qzLen">${[5, 10, 20].map(n => `<button data-len="${n}" class="${S.quiz.len === n ? "on" : ""}">${n} questions</button>`).join("")}</div>
+      <button class="qz-go" id="qzGo">Start quiz 🍸</button>
+      ${st.bestStreak ? `<p class="about">🔥 Longest streak: ${st.bestStreak} in a row</p>` : ""}`;
+    return;
+  }
+  if (Q.phase === "play") {
+    const q = Q.list[Q.i]; Q.cur = q; const done = Q.answered != null, n = Q.list.length;
+    const glass = q.glass === "show" ? `<div class="qz-glass">${glassSVG(q.d)}</div>` : q.glass === "mystery" ? `<div class="qz-glass mystery">${glassSVG(q.d)}</div>` : "";
+    const clue = q.clue ? `<div class="qz-clue">${q.clue.map(i => `<div><span>${esc(ingLabel(i))}</span><span>${esc(fmtAmt(i))}</span></div>`).join("")}</div>` : "";
+    const right = done && Q.answered === q.ans;
+    const fb = done ? `<div class="qz-fb ${right ? "ok" : "no"}"><b>${right ? pickOne(["Nailed it! 🎯", "Cheers, correct! 🥂", "Bartender-approved ✅", "Smooth pour! ✨"]) : `Not quite — it's ${esc(q.glassOpts ? GLASS_LABEL[q.ans] : q.ans)}`}</b>${esc(q.why)}<br><span class="lk" data-study="${esc(q.d.id)}">Study the ${esc(q.d.name)} recipe ›</span></div>
+      <button class="qz-next" id="qzNext">${Q.i + 1 >= n ? "See my results 🏆" : "Next question ›"}</button>` : "";
+    box.innerHTML = `
+      <div class="qz-top"><button class="round-btn" id="qzQuit" aria-label="Quit quiz"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <div class="qz-progress"><i style="width:${((Q.i + (done ? 1 : 0)) / n * 100).toFixed(1)}%"></i></div><div class="qz-score">${Q.score}/${n}</div></div>
+      <div class="qz-streak${Q.streak >= 2 ? " pop" : ""}">${Q.streak >= 2 ? `🔥 ${Q.streak} in a row!` : ""}</div>
+      <div class="qz-card" id="qzCard">
+        <div class="qz-kind">Question ${Q.i + 1} of ${n} · ${QZ_KIND[q.type]}</div>
+        ${glass}<div class="qz-q">${q.q}</div>${clue}
+        <div class="qz-opts${done ? " locked" : ""}">${q.opts.map((o, k) => qzOptHTML(q, o, k)).join("")}</div>
+        ${fb}
+      </div>`;
+    return;
+  }
+  // results
+  const n = Q.list.length, pct = Math.round(Q.score / n * 100);
+  const [medal, title] = pct >= 90 ? ["🏆", "Master Mixologist"] : pct >= 70 ? ["🥇", "Head Bartender"] : pct >= 50 ? ["🥈", "Barback with Promise"] : pct >= 25 ? ["🥉", "Happy-Hour Regular"] : ["🍋", "Still Learning the Taps"];
+  const missed = [...new Map(Q.missed.map(m => [m.d.id, m])).values()];
+  box.innerHTML = `<div class="qz-res">
+    <span class="medal">${medal}</span><h2>${pct >= 70 ? "Cheers!" : "Last call!"}</h2>
+    <div class="big">${Q.score}<small>/${n}</small></div>
+    <p><b>${title}</b> · ${pct}%${Q.bestStreak >= 2 ? ` · 🔥 best streak ${Q.bestStreak}` : ""}</p>
+    ${Q.newBest ? `<span class="new">NEW PERSONAL BEST</span>` : ""}
+    ${missed.length ? `<div class="qz-miss"><div class="qz-lbl" style="margin-top:0">Brush up on these</div>${missed.map(m => `<button class="row" data-study="${esc(m.d.id)}" style="width:100%;text-align:left"><span class="gi">${glassSVG(m.d)}</span><div>${esc(m.d.name)}<small>Missed: ${esc(QZ_KIND[m.type])}</small></div><span class="go">›</span></button>`).join("")}</div>` : `<p>Flawless round — not a drop spilled. 🍸</p>`}
+    <div class="qz-acts"><button class="pill-btn primary" id="qzAgain">🔁 Play again</button><button class="pill-btn" id="qzLobby">Back to quiz menu</button></div></div>`;
+}
+function answerQuiz(btn) {
+  const q = Q.list[Q.i]; if (!q || Q.answered != null) return;
+  Q.answered = btn.dataset.o; const right = Q.answered === q.ans;
+  S.quiz.asked++;
+  if (right) { Q.score++; Q.streak++; S.quiz.right++; Q.bestStreak = Math.max(Q.bestStreak, Q.streak); sfx("right"); const r = btn.getBoundingClientRect(); sparkle(r.left + 30, r.top + r.height / 2, Q.streak >= 3 ? 24 : 14, ["#9ccc6a", "#d8f0a0", "#f2a541", "#fff2d8"]); }
+  else { Q.streak = 0; Q.missed.push(q); sfx("wrong"); try { navigator.vibrate && navigator.vibrate(120); } catch (e) {} }
+  S.quiz.bestStreak = Math.max(S.quiz.bestStreak, Q.bestStreak); save();
+  renderQuiz();
+  if (!right) { const c = $("#qzCard"); c.classList.remove("shake"); void c.offsetWidth; c.classList.add("shake"); }
+  const nx = $("#qzNext"); if (nx) setTimeout(() => nx.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+}
+function nextQuiz() {
+  if (Q.i + 1 >= Q.list.length) {
+    const pct = Math.round(Q.score / Q.list.length * 100);
+    const prev = S.quiz.best[Q.deck]; Q.newBest = prev == null || pct > prev;
+    if (Q.newBest) S.quiz.best[Q.deck] = pct;
+    S.quiz.played++; save(); Q.phase = "done"; renderQuiz(); scrollTo(0, 0);
+    sfx(pct >= 50 ? "tada" : "clink"); if (pct >= 50) { setTimeout(() => sfx("clink"), 300); sparkle(innerWidth / 2, innerHeight * .25, 40); }
+    return;
+  }
+  Q.i++; Q.answered = null; sfx("swoosh"); renderQuiz(); scrollTo(0, 0);
+}
+$("#quizBox").addEventListener("click", e => {
+  const dk = e.target.closest("[data-deck]"); if (dk) { S.quiz.deck = dk.dataset.deck; save(); sfx("tick"); renderQuiz(); return; }
+  const qt = e.target.closest("[data-qt]"); if (qt) { const t = qt.dataset.qt, a = S.quiz.types;
+    if (a.includes(t)) { if (a.length === 1) { toast("Keep at least one question type"); return; } a.splice(a.indexOf(t), 1); } else a.push(t);
+    save(); sfx("tick"); renderQuiz(); return; }
+  const ln = e.target.closest("[data-len]"); if (ln) { S.quiz.len = +ln.dataset.len; save(); sfx("tick"); renderQuiz(); return; }
+  if (e.target.closest("#qzGo") || e.target.closest("#qzAgain")) { startQuiz(); return; }
+  if (e.target.closest("#qzLobby")) { Q.phase = "lobby"; sfx("tick"); renderQuiz(); scrollTo(0, 0); return; }
+  if (e.target.closest("#qzQuit")) { if (Q.i > 0 || Q.answered != null) { if (!confirm("Quit this round? Your score won't be saved.")) return; } Q.phase = "lobby"; sfx("thunk"); renderQuiz(); scrollTo(0, 0); return; }
+  const st = e.target.closest("[data-study]"); if (st) { openDrink(st.dataset.study); return; }
+  const o = e.target.closest(".qz-opt"); if (o) { answerQuiz(o); return; }
+  if (e.target.closest("#qzNext")) { nextQuiz(); return; }
+});
+
 // ───────────────────────── SETTINGS ─────────────────────────
 function syncUnits() { $$("[data-unit]").forEach(b => b.classList.toggle("on", b.dataset.unit === S.units)); }
-function setUnits(u) { if (S.units === u) return; S.units = u; save(); sfx("tick"); syncUnits(); if (openId) rerenderDetail(); toast(u === "ml" ? "Switched to milliliters 🇪🇺" : "Switched to fluid ounces 🇺🇸"); }
+function setUnits(u) { if (S.units === u) return; S.units = u; save(); sfx("tick"); syncUnits(); if (openId) rerenderDetail(); if (current === "quiz") renderQuiz(); toast(u === "ml" ? "Switched to milliliters 🇪🇺" : "Switched to fluid ounces 🇺🇸"); }
 document.addEventListener("click", e => { const u = e.target.closest(".unit-seg [data-unit]"); if (u && !e.target.closest("#sheetInner")) setUnits(u.dataset.unit); });
 const SND_ON = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>';
 const SND_OFF = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
@@ -1373,7 +1590,7 @@ $("#soundBtn").onclick = toggleSound; $("#sndSwitch").onclick = toggleSound;
 $("#fxSwitch").onclick = () => { S.fx = !S.fx; save(); syncToggles(); sfx("tick"); };
 $("#voiceSwitch").onclick = () => { S.voice = !S.voice; save(); syncToggles(); syncBMTools(); sfx("tick"); if (S.voice) speak("Voice on. Cheers!"); };
 $("#exportBtn").onclick = () => {
-  const data = JSON.stringify({ app: "Garnish", v: 2, exported: new Date().toISOString(), cab: S.cab, fav: S.fav, units: S.units, custom: S.custom }, null, 2);
+  const data = JSON.stringify({ app: "Garnish", v: 3, exported: new Date().toISOString(), cab: S.cab, fav: S.fav, units: S.units, custom: S.custom, quiz: S.quiz }, null, 2);
   const blob = new Blob([data], { type: "application/json" }); const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `garnish-backup-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -1383,6 +1600,7 @@ $("#importFile").onchange = e => {
   const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
   rd.onload = () => { try { const j = JSON.parse(rd.result); if (!Array.isArray(j.cab) || !Array.isArray(j.fav)) throw 0;
     if (Array.isArray(j.custom)) S.custom = j.custom.filter(c => c && c.id && c.name && Array.isArray(c.ings));
+    if (j.quiz && typeof j.quiz === "object") S.quiz = Object.assign(S.quiz, j.quiz);
     rebuild();
     S.cab = j.cab.filter(n => SHELF_OF[n]); S.fav = j.fav.filter(id => BY_ID[id]); if (j.units) S.units = j.units; save(); syncUnits(); renderChips();
     sfx("tada"); toast(`Restored ${S.cab.length} ingredients, ${S.fav.length} faves & ${S.custom.length} recipes ✨`); refreshCurrent(); }
@@ -1390,7 +1608,7 @@ $("#importFile").onchange = e => {
   rd.readAsText(f);
 };
 $("#resetBtn").onclick = () => { if (!confirm("Empty your Liquor Cabinet and clear all favorites? (Your own recipes stay.)")) return; S.cab = []; S.fav = []; S.pick = []; save(); sfx("thunk"); toast("Bar wiped clean. Last call!"); refreshCurrent(); };
-function renderAbout() { $("#about").innerHTML = `Garnish v2.3 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
+function renderAbout() { $("#about").innerHTML = `Garnish v2.4 · ${BUILTIN.length} drinks${S.custom.length ? ` + ${S.custom.length} of yours` : ""} · ${ALL_INGS.length} ingredients<br>Works offline once installed. Please drink responsibly —<br>the floor is not a chair.`; }
 
 // ───────────────────────── Navigation ─────────────────────────
 let current = "menu";
@@ -1403,14 +1621,16 @@ function show(v) {
   scrollTo(0, 0); refreshCurrent();
 }
 function refreshCurrent() {
-  if (current === "menu") renderMenu(); else if (current === "mix") renderMix(); else if (current === "cab") renderCab(); else if (current === "fav") renderFav(); else renderAbout();
+  if (current === "menu") renderMenu(); else if (current === "mix") renderMix(); else if (current === "cab") renderCab(); else if (current === "fav") renderFav();
+  else if (current === "quiz") { if (Q.phase !== "play") renderQuiz(); } else renderAbout();
 }
 $(".tabbar").onclick = e => { const b = e.target.closest("[data-view]"); if (b) show(b.dataset.view); };
 
 // init
-rebuild(); collapseAllShelves(); renderChips(); renderMenu(); syncUnits(); syncToggles(); syncBMTools(); renderAbout(); save();
+rebuild(); collapseAllShelves(); renderChips(); renderMenu(); syncUnits(); syncToggles(); syncBMTools(); renderAbout(); renderQuiz(); save();
 window.Garnish = { open: openDrink, ids: () => DR.map(d => d.id), steps: id => buildSteps(BY_ID[id]), build: openBuilder,
-  dbl: id => [...doubleSet(BY_ID[id])].map(i => i.name), bm: openBM, timer: t => stepTimer(t), mentions: (id, k) => stepMentions(buildSteps(BY_ID[id])[k], BY_ID[id].ingredients).list.map(i => i.name) };
+  dbl: id => [...doubleSet(BY_ID[id])].map(i => i.name), bm: openBM, timer: t => stepTimer(t), mentions: (id, k) => stepMentions(buildSteps(BY_ID[id])[k], BY_ID[id].ingredients).list.map(i => i.name),
+  q: (id, t) => { const q = makeQuestion(BY_ID[id], t); return q && { q: q.q, opts: q.opts, ans: q.ans }; }, show };
 
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 try { screen.orientation && screen.orientation.lock && screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
